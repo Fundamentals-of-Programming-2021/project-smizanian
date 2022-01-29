@@ -230,12 +230,6 @@ void random_map_generator() {
 
     srand(time(NULL));
 
-
-    ////////////////////////// random number of players ///////////////////////
-    /*
-    int number_of_players = (rand())%4 + 2;
-    */
-
     // getting number of players
     int number_of_players = 0;
     printf ("Enter a number between 2 to 6:");
