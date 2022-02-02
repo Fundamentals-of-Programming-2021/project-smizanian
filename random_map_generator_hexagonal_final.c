@@ -87,7 +87,7 @@ void map_generator(int number_of_players, int players_first_state[number_of_play
 
             // borders
             if (xcounter==0 || ycounter<(HEXAGON_h/2+1) || abs(SCREEN_HEIGHT-ycounter)<=(HEXAGON_h/2 + 1) || abs(SCREEN_WIDTH-xcounter)<=(HEXAGON_h/2 + 1)) {
-                fprintf(map_ptr, "%d %d\n", 9, 0);
+                fprintf(map_ptr, "%d %d %d %d\n", 9, 0, xcounter, ycounter);
                 ycounter = ycounter + HEXAGON_h;
                 j++;
                 continue;
@@ -98,7 +98,7 @@ void map_generator(int number_of_players, int players_first_state[number_of_play
             find = find_in_players_first_state(number_of_players, players_first_state, 2*i, j, flag);
             if (find != 0) {
                 printf ("Player-A!\n");
-                fprintf(map_ptr, "%d %d\n", find-1, (rand())%30 + 51);
+                fprintf(map_ptr, "%d %d %d %d\n", find-1, (rand())%30 + 51, xcounter, ycounter);
                 ycounter = ycounter + HEXAGON_h;
                 j++;
                 continue;
@@ -106,10 +106,10 @@ void map_generator(int number_of_players, int players_first_state[number_of_play
 
             // gray and black lands
             if (((rand())%1000)%(7 - (CELL_NUM/number_of_players)%4) == 0) {
-                fprintf(map_ptr, "%d %d\n", 9, 0);
+                fprintf(map_ptr, "%d %d %d %d\n", 9, 0, xcounter, ycounter);
             }
             else {
-                fprintf(map_ptr, "%d %d\n", 8, 65);
+                fprintf(map_ptr, "%d %d %d %d\n", 8, 65, xcounter, ycounter);
             }
             j++;
             ycounter = ycounter + HEXAGON_h;
@@ -139,7 +139,7 @@ void map_generator(int number_of_players, int players_first_state[number_of_play
 
             // borders
             if (xcounter==0 || ycounter<(HEXAGON_h/2+1) || abs(SCREEN_HEIGHT-ycounter)<=(HEXAGON_h/2 + 1) || abs(SCREEN_WIDTH-xcounter)<=(HEXAGON_h/2 + 1)) {
-                fprintf(map_ptr, "%d %d\n", 9, 0);
+                fprintf(map_ptr, "%d %d %d %d\n", 9, 0, xcounter, ycounter);
                 ycounter = ycounter + HEXAGON_h;
                 j++;
                 continue;
@@ -150,7 +150,7 @@ void map_generator(int number_of_players, int players_first_state[number_of_play
             find = find_in_players_first_state(number_of_players, players_first_state, 2*i-1, j, flag);
             if (find != 0) {
                 printf ("Player-B!\n");
-                fprintf(map_ptr, "%d %d\n", find-1, (rand())%30 + 51);
+                fprintf(map_ptr, "%d %d %d %d\n", find-1, (rand())%30 + 51, xcounter, ycounter);
                 ycounter = ycounter + HEXAGON_h;
                 j++;
                 continue;
@@ -158,10 +158,10 @@ void map_generator(int number_of_players, int players_first_state[number_of_play
 
             // gray and black lands
             if (((rand())%1000)%(7 - (CELL_NUM/number_of_players)%4) == 0) {
-                fprintf(map_ptr, "%d %d\n", 9, 0);
+                fprintf(map_ptr, "%d %d %d %d\n", 9, 0, xcounter, ycounter);
             }
             else {
-                fprintf(map_ptr, "%d %d\n", 8, 65);
+                fprintf(map_ptr, "%d %d %d %d\n", 8, 65, xcounter, ycounter);
             }
 
             j++;
@@ -230,6 +230,12 @@ void random_map_generator() {
 
     srand(time(NULL));
 
+
+    ////////////////////////// random number of players ///////////////////////
+    /*
+    int number_of_players = (rand())%4 + 2;
+    */
+
     // getting number of players
     int number_of_players = 0;
     printf ("Enter a number between 2 to 6:");
@@ -256,6 +262,7 @@ void random_map_generator() {
 
     HEXAGON_COUNT = count_hexagons();
     fprintf(map_ptr, "%d\n", HEXAGON_COUNT);
+    fprintf(map_ptr, "%d\n", number_of_players);
 
 
     map_generator(number_of_players, players_first_state, map_ptr);
@@ -278,5 +285,4 @@ int main()
 
     return 0;
 }
-
 
