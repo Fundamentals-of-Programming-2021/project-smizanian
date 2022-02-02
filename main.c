@@ -10,18 +10,18 @@
 #include <stdio.h>
 #include <stdbool.h>
 #include <string.h>
+#include <time.h>
+#include "main_menu.h"
 
 
 
 
 //constant variables
-const int FPS = 60;
-const int SCREEN_WIDTH = 600;
-const int SCREEN_HEIGHT = 600;
 const int CELL_NUM = 8;
 const int HEXAGON_h = (SCREEN_HEIGHT/CELL_NUM)/1 + 1;
 const int HEXAGON_SIDE = (HEXAGON_h/(2*0.866025))/1 + 1;
 int HEXAGON_COUNT = 85;
+int NUMBER_OF_PLAYERS = 6;
 //const int HEXAGON_COUNT = ((SCREEN_WIDTH/(3*HEXAGON_SIDE))*(CELL_NUM + CELL_NUM - 1) + CELL_NUM);
 
 
@@ -31,7 +31,14 @@ int HEXAGON_COUNT = 85;
 // for map
 typedef struct my_map_hexagonal{
     int color_index;
-    int soldier;
+    float soldier;
+    int X;
+    int Y;
+    int potion_id;
+    int soldier_speed;
+    float rate;
+    bool is_s;
+    bool is_d;
 } hexagonal;
 
 // for scoreboard
@@ -42,6 +49,31 @@ typedef struct users_in_score_board{
     char score_in_string[9];
     struct users_in_score_board* next_user;
 }score_board_struct;
+
+// Potions
+typedef struct game_Potions{
+    int potion_time;
+    bool potion_in_use;
+    short potion_id;
+}potion;
+
+// Soldier
+typedef struct game_soldier{
+    float X;
+    float Y;
+    float V_x;
+    float V_y;
+    int X_d;
+    int Y_d;
+    int land_id;
+}soldier;
+
+// matrix_units
+typedef struct matrix_unit{
+    bool Potion;
+    potion local_potion;
+    soldier local_soldiers[8];
+}matrix_unit;
 
 
 
@@ -65,11 +97,10 @@ void drawCircle(SDL_Renderer *sdlRenderer, int x_int, int y_int, Uint32 color) {
 // important function prototypes
 // map
 void read_file(FILE* file_ptr, hexagonal map[HEXAGON_COUNT], Uint32 hexagonal_colors[HEXAGON_COUNT], Uint32 map_colors[10]);
-void drawHexagon(SDL_Renderer *sdlRenderer, int xcounter, int ycounter, Uint32 hexagon_color);
+void drawHexagon(SDL_Renderer *sdlRenderer, int xcounter, int ycounter, Uint32 hexagon_color, float soldiers);
 void drawHexagonalMap(SDL_Renderer *sdlRenderer, hexagonal map[HEXAGON_COUNT], Uint32 hexagonal_colors[HEXAGON_COUNT]);
 
-// images and menu
-void imageLoader(SDL_Renderer *sdlRenderer, char image_name[100], int X, int Y, int W, int H);
+// menu
 // main menu
 int Which_item_selected(int X_of_mouse, int Y_of_mouse, Uint16 X_item1, Uint16 Y_item1,Uint16 H_items, Uint16 W_items, Uint16 D_items);
 int main_menu(char username[100], SDL_Renderer* sdlMenuRenderer, int letter_counter);
@@ -84,6 +115,12 @@ void fill_strings_for_ranks_and_scores(score_board_struct* users_ptr, int user_c
 void writing_on_scoreboard(SDL_Renderer * sdlScoreboardRenderer, score_board_struct* users_head_ptr, int user_counter);
 int Which_item_selected_in_scoreboard(int X_of_mouse, int Y_of_mouse, Uint16 X_item1, Uint16 Y_item1,Uint16 H_items, Uint16 W_items, Uint16 D_items);
 int Scoreboard_manu(SDL_Renderer* sdlScoreboardRenderer);
+// logic
+int Delta_D_calculator(int X1, int Y1, int X2, int Y2);
+int X_Y_to_hexagon(int mouse_X, int mouse_Y);
+int potion_generator(SDL_Renderer * sdlRenderer, int* X_of_potion, int* Y_of_potion, hexagonal map[HEXAGON_COUNT]);
+int AI(int X_s, int Y_s, hexagonal map[HEXAGON_COUNT], int* X_dis, int* Y_dis, int myID);
+void filling_main_matrix_for_attacks(matrix_unit main_matrix[60][60], hexagonal map[HEXAGON_COUNT], int X_dis, int Y_dis, int i, int j);
 
 
 
@@ -95,6 +132,11 @@ int main() {
         printf("SDL could not initialize! SDL_Error: %s\n", SDL_GetError());
         return 0;
     }
+    printf ("Hello!\n");
+
+    // random set
+    srand(time(0));
+
 
     // window
     SDL_Window *sdlWindow = SDL_CreateWindow("myState.io", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, SCREEN_WIDTH,
@@ -154,8 +196,12 @@ int main() {
         strcpy(username, "new user 1");
     }
 
-    puts(username);
+    // saving username
+    char scoreboard_name[] = "scoreboard.txt";
+    FILE* scoreboard_ptr = fopen(scoreboard_name, "a");
+    fprintf (scoreboard_ptr, "%s\n%d\n", username, 0);
 
+    puts(username);
 
 
 
@@ -168,6 +214,7 @@ int main() {
         printf ("Error opening file. \n");
     }
     fscanf(file_ptr, "%d\n", &HEXAGON_COUNT);
+    fscanf(file_ptr, "%d\n", &NUMBER_OF_PLAYERS);
 
     hexagonal map[HEXAGON_COUNT];
 
@@ -186,6 +233,33 @@ int main() {
     // image variables
     char image_name[100] = {"image.bmp"};
 
+    // potion variables
+    int X_of_potion;
+    int Y_of_potion;
+    int potion_flag;
+
+    // logic variables and first initializations for main matrix
+    matrix_unit main_matrix[60][60];
+    for (int i=0; i<SCREEN_WIDTH/10; i++) {
+        for (int j=0; j<SCREEN_HEIGHT/10; j++) {
+            main_matrix[i][j].Potion = false;
+            for (int k=0; k<8; k++) {
+                main_matrix[i][j].local_soldiers[k].V_y = 0;
+                main_matrix[i][j].local_soldiers[k].V_x = 0;
+                main_matrix[i][j].local_soldiers[k].Y = 0;
+                main_matrix[i][j].local_soldiers[k].X = 0;
+                main_matrix[i][j].local_soldiers[k].X_d = 0;
+                main_matrix[i][j].local_soldiers[k].Y_d = 0;
+                main_matrix[i][j].local_soldiers[k].land_id = 9;
+            }
+        }
+    }
+
+    // logical variables for AI and attack
+    int X_dis = 0;
+    int Y_dis = 0;
+    int id_dis = 0;
+
 
     SDL_bool shallExit = SDL_FALSE;
     while (shallExit == SDL_FALSE) {
@@ -196,6 +270,94 @@ int main() {
         // drawing the map
         drawHexagonalMap(sdlRenderer, map, hexagonal_colors);
 
+
+        // logical part of code
+        // lands soldier adding
+        for (int i=0; i<HEXAGON_COUNT; i++) {
+            if (map[i].color_index != 9 && map[i].color_index != 8 && map[i].soldier < 150) {
+                if (map[i].soldier < 150 && (map[i].soldier + map[i].rate)>150) {
+                    map[i].soldier = 150;
+                }
+                else {
+                    map[i].soldier += map[i].rate;
+                }
+            }
+        }
+
+
+        // potions
+        potion_flag = potion_generator(sdlRenderer, &X_of_potion, &Y_of_potion, map);
+        if (potion_flag == 1) {
+            main_matrix[X_of_potion][Y_of_potion].Potion = true;
+            main_matrix[X_of_potion][Y_of_potion].local_potion.potion_in_use = false;
+            main_matrix[X_of_potion][Y_of_potion].local_potion.potion_id = rand()%4;
+            main_matrix[X_of_potion][Y_of_potion].local_potion.potion_time = rand()%100000 + 1000;
+        }
+
+
+        // attacks
+        for (int i=0; i<HEXAGON_COUNT; i++) {
+            if (map[i].color_index == 9 || map[i].color_index == 8 || map[i].color_index == 0) {
+                continue;
+            }
+            if (rand()%200 == 50) {
+                id_dis = AI(map[i].X, map[i].Y, map, &X_dis, &Y_dis, i);
+                map[i].is_s = true;
+                map[id_dis].is_d = true;
+                for (int j=0; j<8; j++) {
+                    if (main_matrix[map[i].X/10][map[i].Y/10].local_soldiers[j].X == 0) {
+                        filling_main_matrix_for_attacks(main_matrix, map, X_dis, Y_dis, i, j);
+                        break;
+                    }
+                }
+            }
+        }
+
+
+
+
+
+
+
+
+
+
+
+
+
+        // drawing main matrix
+        for (int i=0; i<SCREEN_WIDTH/10; i++) {
+            for (int j=0; j<SCREEN_HEIGHT/10; j++) {
+
+                // drawing potions
+                if (main_matrix[i][j].Potion == true) {
+                    if (main_matrix[i][j].local_potion.potion_time == 0) {
+                        main_matrix[i][j].Potion = false;
+                    }
+                    else {
+                        if (main_matrix[i][j].local_potion.potion_in_use == true) {
+                            main_matrix[i][j].local_potion.potion_time -= 100;
+                        }
+                        filledCircleColor(sdlRenderer, 10*i+5, 10*j+5, 5, 0xffffffff);
+                    }
+                }
+
+                // drawing soldiers and moving for next state
+                for (int k=0; k<8; k++) {
+                    if (main_matrix[i][j].local_soldiers[k].X != 0) {
+                        //filledCircleColor(sdlRenderer, 10*i+5, 10*j+5, 5, 0xfff00fff);
+                        filledCircleColor(sdlRenderer, main_matrix[i][j].local_soldiers[k].X, main_matrix[i][j].local_soldiers[k].Y, 5, 0xfff00fff);
+                        if (Delta_D_calculator(main_matrix[i][j].local_soldiers[k].X, main_matrix[i][j].local_soldiers[k].Y, main_matrix[i][j].local_soldiers[k].X_d, main_matrix[i][j].local_soldiers[k].Y_d) <= HEXAGON_SIDE/3) {
+                            main_matrix[i][j].local_soldiers[k].X = 0;
+                        }
+                        else {
+                            main_matrix[i][j].local_soldiers[k].X += main_matrix[i][j].local_soldiers[k].V_x;
+                            main_matrix[i][j].local_soldiers[k].Y += main_matrix[i][j].local_soldiers[k].V_y;
+                        }
+                    }
+                }
+            }
+        }
 
         // rendering
         SDL_RenderPresent(sdlRenderer);
@@ -211,7 +373,8 @@ int main() {
                 case SDL_MOUSEBUTTONDOWN:
                     if (sdlEvent.button.button == SDL_BUTTON_LEFT) {
                         SDL_GetMouseState(&mouse_X, &mouse_Y);
-                        printf("Left click on X: %d and Y:%d\n", mouse_X / (SCREEN_WIDTH / CELL_NUM) + 1 , mouse_Y / (SCREEN_HEIGHT / CELL_NUM) + 1);
+                        printf ("You clicked on X %d, Y %d, id %d\n", mouse_X, mouse_Y, X_Y_to_hexagon(mouse_X, mouse_Y));
+                        printf ("Color of your clicked hexagon is in index %d\n", map[X_Y_to_hexagon(mouse_X, mouse_Y)-1].color_index);
                     }
                     break;
             }
@@ -249,12 +412,20 @@ void read_file(FILE* file_ptr, hexagonal map[HEXAGON_COUNT], Uint32 hexagonal_co
 
     int color_index;
     int soldier;
-    Uint32 color;
+    int temp_x;
+    int temp_y;
     for (int i=0; i<HEXAGON_COUNT; i++) {
-        fscanf(file_ptr, "%d %d\n", &color_index, &soldier);
+        fscanf(file_ptr, "%d %d %d %d\n", &color_index, &soldier, &temp_x, &temp_y);
 
         map[i].color_index = color_index;
-        map[i].soldier = soldier;
+        map[i].soldier = (float)soldier;
+        map[i].X = temp_x;
+        map[i].Y = temp_y;
+        map[i].potion_id = 0;
+        map[i].rate = 0.4;
+        map[i].soldier_speed = 50;
+        map[i].is_s = false;
+        map[i].is_d = false;
         hexagonal_colors[i] = map_colors[map[i].color_index];
     }
 
@@ -262,12 +433,18 @@ void read_file(FILE* file_ptr, hexagonal map[HEXAGON_COUNT], Uint32 hexagonal_co
 
 }
 
-void drawHexagon(SDL_Renderer *sdlRenderer, int xcounter, int ycounter, Uint32 hexagon_color) {
+void drawHexagon(SDL_Renderer *sdlRenderer, int xcounter, int ycounter, Uint32 hexagon_color, float soldiers) {
+
+    char number_of_soldiers[9] = {0};
+    score_to_score_in_scoreboard(number_of_soldiers, (int)soldiers);
+
     Sint16 X[6] = {(Sint16)(xcounter+HEXAGON_SIDE/2), (Sint16)(xcounter+HEXAGON_SIDE), (Sint16)(xcounter+HEXAGON_SIDE/2), (Sint16)(xcounter-HEXAGON_SIDE/2), (Sint16)(xcounter-HEXAGON_SIDE), (Sint16)(xcounter-HEXAGON_SIDE/2)};
     Sint16 Y[6] = {(Sint16)(ycounter+HEXAGON_SIDE*0.866025), (Sint16)(ycounter), (Sint16)(ycounter-HEXAGON_SIDE*0.866025), (Sint16)(ycounter-HEXAGON_SIDE*0.866025), (Sint16)(ycounter), (Sint16)(ycounter+HEXAGON_SIDE*0.866025)};
     if (hexagon_color != 0xffffff00) {
         filledPolygonColor(sdlRenderer, X, Y, 6, hexagon_color - 0x4f000000);
         drawCircle(sdlRenderer, xcounter, ycounter, hexagon_color);
+        stringColor(sdlRenderer, xcounter-8, ycounter+15, number_of_soldiers, 0xff000000);
+
     }
     else {
         filledPolygonColor(sdlRenderer, X, Y, 6, hexagon_color);
@@ -286,7 +463,7 @@ void drawHexagonalMap(SDL_Renderer *sdlRenderer, hexagonal map[HEXAGON_COUNT], U
     while (xcounter < (SCREEN_WIDTH+(HEXAGON_h/2))) {
 
         while (ycounter<(SCREEN_HEIGHT+(HEXAGON_h/2))) {
-            drawHexagon(sdlRenderer, xcounter, ycounter, hexagonal_colors[hexagon_counter]);
+            drawHexagon(sdlRenderer, xcounter, ycounter, hexagonal_colors[hexagon_counter], map[hexagon_counter].soldier);
             //printf ("X is: %d , Y is: %d\n", xcounter, ycounter);
             hexagon_counter++;
             ycounter = ycounter + HEXAGON_h;
@@ -301,7 +478,7 @@ void drawHexagonalMap(SDL_Renderer *sdlRenderer, hexagonal map[HEXAGON_COUNT], U
     while (xcounter < (SCREEN_WIDTH+(HEXAGON_h/2))) {
 
         while (ycounter<(SCREEN_HEIGHT+(HEXAGON_h/2))) {
-            drawHexagon(sdlRenderer, xcounter, ycounter, hexagonal_colors[hexagon_counter]);
+            drawHexagon(sdlRenderer, xcounter, ycounter, hexagonal_colors[hexagon_counter], map[hexagon_counter].soldier);
             //printf("X is: %d , Y is: %d\n", xcounter, ycounter);
             hexagon_counter++;
             ycounter = ycounter + HEXAGON_h;
@@ -316,20 +493,6 @@ void drawHexagonalMap(SDL_Renderer *sdlRenderer, hexagonal map[HEXAGON_COUNT], U
 }
 
 
-// images and menu
-void imageLoader(SDL_Renderer *sdlRenderer, char image_name[100], int X, int Y, int W, int H) {
-    SDL_Surface * image = SDL_LoadBMP(image_name);
-    SDL_Texture * texture = SDL_CreateTextureFromSurface(sdlRenderer, image);
-    SDL_Rect dstrect = { X, Y, W, H };
-    SDL_RenderCopy(sdlRenderer, texture, NULL, &dstrect);
-
-    /*
-    SDL_DestroyTexture(texture);
-    SDL_FreeSurface(image);
-     */
-
-    return;
-}
 
 // main menu functions
 
@@ -927,6 +1090,154 @@ int Scoreboard_manu(SDL_Renderer* sdlScoreboardRenderer) {
 
     return item_selected_in_scoreboard;
 }
+
+
+// logic
+int Delta_D_calculator(int X1, int Y1, int X2, int Y2) {
+    return ((X1-X2)*(X1-X2) + (Y1-Y2)*(Y1-Y2));
+}
+int X_Y_to_hexagon(int mouse_X, int mouse_Y) {
+
+    int id_check[3][2];
+    int check_counter = 0;
+    int xcounter = 0;
+    int ycounter = 0;
+    int hexagon_counter = 0;
+    int Delta_D = 0;
+
+    while (xcounter < (SCREEN_WIDTH+(HEXAGON_h/2))) {
+        while (ycounter<(SCREEN_HEIGHT+(HEXAGON_h/2))) {
+            hexagon_counter++;
+
+            Delta_D = Delta_D_calculator(xcounter, ycounter, mouse_X, mouse_Y);
+
+            if (Delta_D <= (HEXAGON_h/2)*(HEXAGON_h/2)) {
+                return hexagon_counter++;
+            }
+            if (Delta_D <= (HEXAGON_SIDE)*(HEXAGON_SIDE)) {
+                id_check[check_counter][0] = Delta_D;
+                id_check[check_counter][1] = hexagon_counter;
+                check_counter++;
+            }
+
+            ycounter = ycounter + HEXAGON_h;
+
+        }
+        ycounter = 0;
+        xcounter = xcounter + 3*HEXAGON_SIDE;
+    }
+
+    xcounter = HEXAGON_SIDE + HEXAGON_SIDE/2;
+    ycounter = HEXAGON_h/2;
+
+    while (xcounter < (SCREEN_WIDTH+(HEXAGON_h/2))) {
+
+        while (ycounter<(SCREEN_HEIGHT+(HEXAGON_h/2))) {
+            hexagon_counter++;
+
+            Delta_D = Delta_D_calculator(xcounter, ycounter, mouse_X, mouse_Y);
+
+            if (Delta_D <= (HEXAGON_h/2)*(HEXAGON_h/2)) {
+                return hexagon_counter++;
+            }
+            if (Delta_D <= (HEXAGON_SIDE)*(HEXAGON_SIDE)) {
+                id_check[check_counter][0] = Delta_D;
+                id_check[check_counter][1] = hexagon_counter;
+                check_counter++;
+            }
+
+            ycounter = ycounter + HEXAGON_h;
+
+        }
+
+        ycounter = HEXAGON_h/2;
+        xcounter = xcounter + 3*HEXAGON_SIDE;
+
+    }
+
+
+    int smallest_D = 2000000;
+    int result = 0;
+    for (int i=0; i<check_counter; i++) {
+        if (id_check[i][0] < smallest_D) {
+            smallest_D = id_check[i][0];
+            result = id_check[i][1];
+        }
+    }
+
+    return result;
+
+}
+
+int potion_generator(SDL_Renderer * sdlRenderer, int* X_of_potion, int* Y_of_potion, hexagonal map[HEXAGON_COUNT]) {
+
+    int random_number = (rand()%1000);
+    if (random_number%100 != 0) {
+        return 0;
+    }
+
+    *(X_of_potion) = (rand()%(SCREEN_WIDTH-200) + 100)/10;
+    *(Y_of_potion) = (rand()%(SCREEN_HEIGHT-200) + 100)/10;
+
+    /*
+    while (map[X_Y_to_hexagon(*(X_of_potion), *(Y_of_potion))].color_index == 9) {
+        *(X_of_potion) = (rand()%(SCREEN_WIDTH-200) + 100)/10;
+        *(Y_of_potion) = (rand()%(SCREEN_HEIGHT-200) + 100)/10;
+    }
+    */
+
+    //printf("Potion is in X = %d Y = %d\n", *(X_of_potion), *(Y_of_potion));
+
+    return 1;
+
+}
+
+int AI(int X_s, int Y_s, hexagonal map[HEXAGON_COUNT], int* X_dis, int* Y_dis, int myID) {
+
+    int smallest_Delta_D = 2000000;
+    int Delta_D;
+    for (int i=0; i<HEXAGON_COUNT; i++) {
+        if (map[i].color_index == 9 || (map[i].X == X_s && map[i].Y == Y_s)) {
+            continue;
+        }
+        if (map[i].is_d == false && map[i].is_s == true) {
+            Delta_D = Delta_D_calculator(X_s, Y_s, map[i].X, map[i].Y);
+            if (Delta_D < smallest_Delta_D) {
+                *(X_dis) = map[i].X;
+                *(Y_dis) = map[i].Y;
+                smallest_Delta_D = Delta_D;
+            }
+        }
+
+    }
+
+    if (smallest_Delta_D != 2000000) {
+        //printf ("X_dis is %d, Y_dis is %d but I'm %d and %d\n", *(X_dis), *(Y_dis), X_s, Y_s);
+        //printf ("%d - %d\n", map[X_Y_to_hexagon(*(X_dis), *(Y_dis))-1].color_index, X_Y_to_hexagon(*(X_dis), *(Y_dis))-1);
+        return X_Y_to_hexagon(*(X_dis), *(Y_dis));
+    }
+    if (map[X_Y_to_hexagon(X_s, Y_s - HEXAGON_h)-1].color_index != 9) {
+        printf ("Hi\n");
+        *(X_dis) = X_s;
+        *(Y_dis) = Y_s - HEXAGON_h;
+        //printf ("X_dis is %d, Y_dis is %d but I'm %d and %d\n", *(X_dis), *(Y_dis), X_s, Y_s);
+        return myID - 1;
+    }
+}
+
+void filling_main_matrix_for_attacks(matrix_unit main_matrix[60][60], hexagonal map[HEXAGON_COUNT], int X_dis, int Y_dis, int i, int j) {
+    //printf ("%d - %d\n", map[X_Y_to_hexagon((X_dis), (Y_dis))-1].color_index, X_Y_to_hexagon((X_dis), (Y_dis))-1);
+    main_matrix[map[i].X/10][map[i].Y/10].local_soldiers[j].X = (float)map[i].X;
+    main_matrix[map[i].X/10][map[i].Y/10].local_soldiers[j].Y = (float)map[i].Y;
+    main_matrix[map[i].X/10][map[i].Y/10].local_soldiers[j].land_id = map[i].color_index;
+    main_matrix[map[i].X/10][map[i].Y/10].local_soldiers[j].Y_d = Y_dis;
+    main_matrix[map[i].X/10][map[i].Y/10].local_soldiers[j].X_d = X_dis;
+    int Delta_D = Delta_D_calculator(map[i].X, map[i].Y, X_dis, Y_dis);
+    main_matrix[map[i].X/10][map[i].Y/10].local_soldiers[j].V_x = (float)map[i].soldier_speed * ((float)(X_dis - map[i].X)/(float)Delta_D);
+    main_matrix[map[i].X/10][map[i].Y/10].local_soldiers[j].V_y = (float)map[i].soldier_speed * ((float)(Y_dis - map[i].Y)/(float)Delta_D);
+    //printf ("Speed is Vx = %f, Yy = %f\n", main_matrix[map[i].X/10][map[i].Y/10].local_soldiers[j].V_x, main_matrix[map[i].X/10][map[i].Y/10].local_soldiers[j].V_y);
+}
+
 
 
 
