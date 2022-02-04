@@ -18,7 +18,7 @@
 
 
 //constant variables
-const int CELL_NUM = 8;
+const int CELL_NUM = 6;
 const int HEXAGON_h = (SCREEN_HEIGHT/CELL_NUM)/1 + 1;
 const int HEXAGON_SIDE = (HEXAGON_h/(2*0.866025))/1 + 1;
 int HEXAGON_COUNT = 85;
@@ -110,8 +110,8 @@ void drawCircle(SDL_Renderer *sdlRenderer, int x_int, int y_int, Uint32 color) {
 // important function prototypes
 // map
 void read_file(FILE* file_ptr, hexagonal map[HEXAGON_COUNT], Uint32 hexagonal_colors[HEXAGON_COUNT], Uint32 map_colors[10]);
-void drawHexagon(SDL_Renderer *sdlRenderer, int xcounter, int ycounter, Uint32 hexagon_color, float soldiers);
-void drawHexagonalMap(SDL_Renderer *sdlRenderer, hexagonal map[HEXAGON_COUNT], Uint32 hexagonal_colors[HEXAGON_COUNT]);
+void drawHexagon(SDL_Renderer *sdlRenderer, int xcounter, int ycounter, Uint32 hexagon_color, int soldiers);
+void drawHexagonalMap(SDL_Renderer *sdlRenderer, hexagonal map[HEXAGON_COUNT], Uint32 map_colors[10]);
 // menu
 // main menu
 int Which_item_selected(int X_of_mouse, int Y_of_mouse, Uint16 X_item1, Uint16 Y_item1,Uint16 H_items, Uint16 W_items, Uint16 D_items);
@@ -135,7 +135,11 @@ int AI(int X_s, int Y_s, hexagonal map[HEXAGON_COUNT], int* X_dis, int* Y_dis, i
 void filling_main_matrix_for_attacks(matrix_unit main_matrix[60][60], hexagonal map[HEXAGON_COUNT], int X_dis, int Y_dis, int i, int j);
 void first_initialization_of_main_matrix(matrix_unit main_matrix[SCREEN_HEIGHT/MAIN_MATRIX_UNITS_COUNT][SCREEN_HEIGHT/MAIN_MATRIX_UNITS_COUNT]);
 void soldier_generator_in_attacks(hexagonal map[HEXAGON_COUNT], matrix_unit main_matrix[SCREEN_HEIGHT/MAIN_MATRIX_UNITS_COUNT][SCREEN_HEIGHT/MAIN_MATRIX_UNITS_COUNT], int i);
-
+void set_new_attack(hexagonal map[HEXAGON_COUNT], matrix_unit main_matrix[SCREEN_HEIGHT/MAIN_MATRIX_UNITS_COUNT][SCREEN_HEIGHT/MAIN_MATRIX_UNITS_COUNT], int i, int* X_dis, int* Y_dis, int id_dis);
+int all_soldiers_count_in_one_land(hexagonal map[HEXAGON_COUNT], int index);
+void battle(hexagonal map[HEXAGON_COUNT], matrix_unit main_matrix[SCREEN_HEIGHT/MAIN_MATRIX_UNITS_COUNT][SCREEN_HEIGHT/MAIN_MATRIX_UNITS_COUNT], int i, int j, int k);
+bool is_attack_source_valid(hexagonal map[HEXAGON_COUNT], int mouse_X, int mouse_Y, int* id_s_user);
+bool is_attack_dis_valid(hexagonal map[HEXAGON_COUNT], int mouse_X, int mouse_Y, int id_s_user, int* id_d_user);
 
 
 
@@ -267,6 +271,9 @@ int main() {
     int X_dis = 0;
     int Y_dis = 0;
     int id_dis = 0;
+    bool attack_valid = false;
+    int id_s_user = 0;
+    int id_d_user = 0;
 
 
     SDL_bool shallExit = SDL_FALSE;
@@ -276,16 +283,17 @@ int main() {
         SDL_RenderClear(sdlRenderer);
 
         // drawing the map
-        drawHexagonalMap(sdlRenderer, map, hexagonal_colors);
+        drawHexagonalMap(sdlRenderer, map, map_colors);
 
 
         // logical part of code
         // lands soldier adding and attacks managing in lands
         for (int i=0; i<HEXAGON_COUNT; i++) {
-            if (map[i].color_index != 9 && map[i].color_index != 8 && map[i].soldier < 150) {
+            soldier_count_in_lands = all_soldiers_count_in_one_land(map, i);
+            if (map[i].color_index != 9 && map[i].color_index != 8 && soldier_count_in_lands < 150) {
                 // lands soldier adding
-                if (map[i].soldier < 150 && (map[i].soldier + map[i].rate) > 150) {
-                    map[i].soldier = 150;
+                if (soldier_count_in_lands < 150 && (soldier_count_in_lands + map[i].rate) > 150) {
+                    map[i].soldier = 150 - (soldier_count_in_lands - map[i].soldier);
                 } else {
                     map[i].soldier += map[i].rate;
                 }
@@ -315,32 +323,9 @@ int main() {
             if (map[i].color_index == 9 || map[i].color_index == 8 || map[i].color_index == 0) {
                 continue;
             }
-            if (rand()%200 == 50) {
-                //printf ("Attack\n");
-
+            if (rand()%500 == 50) {
                 id_dis = AI(map[i].X, map[i].Y, map, &X_dis, &Y_dis, i);
-                //printf ("X_dis = %d, Y_dis = %d ", X_dis, Y_dis);
-                //printf ("from X_s = %d, Y_s = %d\n", map[i].X, map[i].Y);
-                map[i].is_s = true;
-                map[id_dis].is_d = true;
-
-                int count = 0;
-                local_attacks = map[i].attacks;
-                while (local_attacks->next_attack != NULL) {
-                    count++;
-                    //printf ("Count is: %d\n", count);
-                    local_attacks = local_attacks->next_attack;
-                }
-                local_attacks->next_attack = (attacks_struct*)malloc(sizeof(attacks_struct));
-                local_attacks = local_attacks->next_attack;
-                local_attacks->next_attack = NULL;
-                local_attacks->soldiers = 10*map[i].soldier;
-                map[i].soldier = 0;
-                local_attacks->Y_dis = Y_dis;
-                local_attacks->X_dis = X_dis;
-                local_attacks->id_dis = id_dis;
-
-
+                set_new_attack(map, main_matrix, i, &X_dis, &Y_dis, id_dis);
             }
         }
 
@@ -361,6 +346,7 @@ int main() {
             for (int j=0; j<SCREEN_HEIGHT/MAIN_MATRIX_UNITS_COUNT; j++) {
 
                 // drawing potions
+                /*
                 if (main_matrix[i][j].Potion == true) {
                     if (main_matrix[i][j].local_potion.potion_time == 0) {
                         main_matrix[i][j].Potion = false;
@@ -372,13 +358,17 @@ int main() {
                         filledCircleColor(sdlRenderer, 10*i+5, 10*j+5, 5, 0xffffffff);
                     }
                 }
+                */
 
                 // drawing soldiers and moving for next state
                 for (int k=0; k<8; k++) {
                     if (main_matrix[i][j].local_soldiers[k].X != 0) {
                         //filledCircleColor(sdlRenderer, 10*i+5, 10*j+5, 5, map_colors[main_matrix[i][j].local_soldiers[k].land_id]);
                         filledCircleColor(sdlRenderer, main_matrix[i][j].local_soldiers[k].X/10*10+5, main_matrix[i][j].local_soldiers[k].Y/10*10+5, 5, map_colors[main_matrix[i][j].local_soldiers[k].land_id]); // 0xfff00fff Pink
+                        // checking if you arrived
                         if (pow(Delta_D_calculator(main_matrix[i][j].local_soldiers[k].X, main_matrix[i][j].local_soldiers[k].Y, main_matrix[i][j].local_soldiers[k].X_d, main_matrix[i][j].local_soldiers[k].Y_d), 0.5)<= HEXAGON_SIDE/3) {
+                            battle(map, main_matrix, i, j, k);
+                            //printf ("%d\n", map[X_Y_to_hexagon(main_matrix[i][j].local_soldiers[k].X, main_matrix[i][j].local_soldiers[k].Y)-1].color_index);
                             main_matrix[i][j].local_soldiers[k].X = 0;
                         }
                         else {
@@ -457,10 +447,25 @@ int main() {
                 case SDL_MOUSEBUTTONDOWN:
                     if (sdlEvent.button.button == SDL_BUTTON_LEFT) {
                         SDL_GetMouseState(&mouse_X, &mouse_Y);
-                        printf ("You clicked on X %d, Y %d, id %d\n", mouse_X, mouse_Y, X_Y_to_hexagon(mouse_X, mouse_Y));
-                        printf ("Color of your clicked hexagon is in index %d\n", map[X_Y_to_hexagon(mouse_X, mouse_Y)-1].color_index);
+                        attack_valid = is_attack_source_valid(map, mouse_X, mouse_Y, &id_s_user);
+                        //printf ("You clicked on X %d, Y %d, id %d\n", mouse_X, mouse_Y, X_Y_to_hexagon(mouse_X, mouse_Y));
+                        //printf ("Color of your clicked hexagon is in index %d\n", map[X_Y_to_hexagon(mouse_X, mouse_Y)-1].color_index);
                     }
                     break;
+                case SDL_MOUSEBUTTONUP:
+                    if (sdlEvent.button.button == SDL_BUTTON_LEFT) {
+                        SDL_GetMouseState(&mouse_X, &mouse_Y);
+                        attack_valid = attack_valid * is_attack_dis_valid(map, mouse_X, mouse_Y, id_s_user, &id_d_user);
+                        if (attack_valid) {
+                            printf("Googooli-e man, dorost hamle kardi\n");
+                            X_dis = map[id_d_user].X;
+                            Y_dis = map[id_d_user].Y;
+                            set_new_attack(map, main_matrix, id_s_user, &X_dis, &Y_dis, id_d_user);
+                        }
+                        else {
+                            printf ("Dorost hamle kon olagh\n");
+                        }
+                    }
             }
         }
     }
@@ -506,7 +511,7 @@ void read_file(FILE* file_ptr, hexagonal map[HEXAGON_COUNT], Uint32 hexagonal_co
         map[i].X = temp_x;
         map[i].Y = temp_y;
         map[i].potion_id = 0;
-        map[i].rate = 0.4;
+        map[i].rate = 0.04;
         map[i].soldier_speed = 2;
         map[i].attacks = (attacks_struct*)malloc(sizeof(attacks_struct));
         map[i].attacks->next_attack = NULL;
@@ -520,10 +525,10 @@ void read_file(FILE* file_ptr, hexagonal map[HEXAGON_COUNT], Uint32 hexagonal_co
 
 }
 
-void drawHexagon(SDL_Renderer *sdlRenderer, int xcounter, int ycounter, Uint32 hexagon_color, float soldiers) {
+void drawHexagon(SDL_Renderer *sdlRenderer, int xcounter, int ycounter, Uint32 hexagon_color, int soldiers) {
 
     char number_of_soldiers[9] = {0};
-    score_to_score_in_scoreboard(number_of_soldiers, (int)soldiers);
+    score_to_score_in_scoreboard(number_of_soldiers, soldiers);
 
     Sint16 X[6] = {(Sint16)(xcounter+HEXAGON_SIDE/2), (Sint16)(xcounter+HEXAGON_SIDE), (Sint16)(xcounter+HEXAGON_SIDE/2), (Sint16)(xcounter-HEXAGON_SIDE/2), (Sint16)(xcounter-HEXAGON_SIDE), (Sint16)(xcounter-HEXAGON_SIDE/2)};
     Sint16 Y[6] = {(Sint16)(ycounter+HEXAGON_SIDE*0.866025), (Sint16)(ycounter), (Sint16)(ycounter-HEXAGON_SIDE*0.866025), (Sint16)(ycounter-HEXAGON_SIDE*0.866025), (Sint16)(ycounter), (Sint16)(ycounter+HEXAGON_SIDE*0.866025)};
@@ -542,7 +547,7 @@ void drawHexagon(SDL_Renderer *sdlRenderer, int xcounter, int ycounter, Uint32 h
     //polygonColor(sdlRenderer, X, Y, 6, hexagon_color);
 }
 
-void drawHexagonalMap(SDL_Renderer *sdlRenderer, hexagonal map[HEXAGON_COUNT], Uint32 hexagonal_colors[HEXAGON_COUNT]) {
+void drawHexagonalMap(SDL_Renderer *sdlRenderer, hexagonal map[HEXAGON_COUNT], Uint32 map_colors[10]) {
     int xcounter = 0;
     int ycounter = 0;
     int hexagon_counter = 0;
@@ -550,7 +555,7 @@ void drawHexagonalMap(SDL_Renderer *sdlRenderer, hexagonal map[HEXAGON_COUNT], U
     while (xcounter < (SCREEN_WIDTH+(HEXAGON_h/2))) {
 
         while (ycounter<(SCREEN_HEIGHT+(HEXAGON_h/2))) {
-            drawHexagon(sdlRenderer, xcounter, ycounter, hexagonal_colors[hexagon_counter], map[hexagon_counter].soldier);
+            drawHexagon(sdlRenderer, xcounter, ycounter, map_colors[map[hexagon_counter].color_index],all_soldiers_count_in_one_land(map, hexagon_counter));
             //printf ("X is: %d , Y is: %d\n", xcounter, ycounter);
             hexagon_counter++;
             ycounter = ycounter + HEXAGON_h;
@@ -565,7 +570,7 @@ void drawHexagonalMap(SDL_Renderer *sdlRenderer, hexagonal map[HEXAGON_COUNT], U
     while (xcounter < (SCREEN_WIDTH+(HEXAGON_h/2))) {
 
         while (ycounter<(SCREEN_HEIGHT+(HEXAGON_h/2))) {
-            drawHexagon(sdlRenderer, xcounter, ycounter, hexagonal_colors[hexagon_counter], map[hexagon_counter].soldier);
+            drawHexagon(sdlRenderer, xcounter, ycounter, map_colors[map[hexagon_counter].color_index],all_soldiers_count_in_one_land(map, hexagon_counter));
             //printf("X is: %d , Y is: %d\n", xcounter, ycounter);
             hexagon_counter++;
             ycounter = ycounter + HEXAGON_h;
@@ -1281,7 +1286,7 @@ int potion_generator(SDL_Renderer * sdlRenderer, int* X_of_potion, int* Y_of_pot
 
 int AI(int X_s, int Y_s, hexagonal map[HEXAGON_COUNT], int* X_dis, int* Y_dis, int myID) {
 
-    int smallest_Delta_D = 300*300;
+    int smallest_Delta_D = 100*100;
     int Delta_D;
     for (int i=0; i<HEXAGON_COUNT; i++) {
         if (map[i].color_index == 9 || (map[i].X == X_s && map[i].Y == Y_s)) {
@@ -1298,7 +1303,7 @@ int AI(int X_s, int Y_s, hexagonal map[HEXAGON_COUNT], int* X_dis, int* Y_dis, i
 
     }
 
-    if (smallest_Delta_D != 300*300) {
+    if (smallest_Delta_D != 100*100) {
         //printf ("X_dis is %d, Y_dis is %d but I'm %d and %d\n", *(X_dis), *(Y_dis), X_s, Y_s);
         //printf ("%d - %d\n", map[X_Y_to_hexagon(*(X_dis), *(Y_dis))-1].color_index, X_Y_to_hexagon(*(X_dis), *(Y_dis))-1);
         return X_Y_to_hexagon(*(X_dis), *(Y_dis));
@@ -1309,7 +1314,7 @@ int AI(int X_s, int Y_s, hexagonal map[HEXAGON_COUNT], int* X_dis, int* Y_dis, i
         if (map[i].color_index == 9 || (map[i].X == X_s && map[i].Y == Y_s)) {
             continue;
         }
-        if (map[i].is_d == false && map[i].color_index == 8) {
+        if (map[i].is_d == false && map[i].color_index != 9 && map[i].color_index != myID) {
             Delta_D = Delta_D_calculator(X_s, Y_s, map[i].X, map[i].Y);
             if (Delta_D < smallest_Delta_D) {
                 *(X_dis) = map[i].X;
@@ -1384,6 +1389,7 @@ void soldier_generator_in_attacks(hexagonal map[HEXAGON_COUNT], matrix_unit main
                         //printf ("Count is: %d\n", count);
                         filling_main_matrix_for_attacks(main_matrix, map, local_attacks->X_dis,
                                                         local_attacks->Y_dis, i, j);
+                        map[local_attacks->id_dis].is_d = true;
                         break;
                     }
                 }
@@ -1397,6 +1403,117 @@ void soldier_generator_in_attacks(hexagonal map[HEXAGON_COUNT], matrix_unit main
     }
 
     return;
+}
+
+void set_new_attack(hexagonal map[HEXAGON_COUNT], matrix_unit main_matrix[SCREEN_HEIGHT/MAIN_MATRIX_UNITS_COUNT][SCREEN_HEIGHT/MAIN_MATRIX_UNITS_COUNT], int i, int* X_dis, int* Y_dis, int id_dis) {
+    //printf ("Attack\n");
+    attacks_struct* local_attacks;
+    //printf ("X_dis = %d, Y_dis = %d ", X_dis, Y_dis);
+    //printf ("from X_s = %d, Y_s = %d\n", map[i].X, map[i].Y);
+    map[i].is_s = true;
+    map[id_dis].is_d = true;
+
+    int count = 0;
+    local_attacks = map[i].attacks;
+    while (local_attacks->next_attack != NULL) {
+        count++;
+        //printf ("Count is: %d\n", count);
+        local_attacks = local_attacks->next_attack;
+    }
+    local_attacks->next_attack = (attacks_struct*)malloc(sizeof(attacks_struct));
+    local_attacks = local_attacks->next_attack;
+    local_attacks->next_attack = NULL;
+    local_attacks->soldiers = 10*map[i].soldier;
+    map[i].soldier = 0;
+    local_attacks->Y_dis = *(Y_dis);
+    local_attacks->X_dis = *(X_dis);
+    local_attacks->id_dis = id_dis;
+    return;
+}
+
+int all_soldiers_count_in_one_land(hexagonal map[HEXAGON_COUNT], int index) {
+    int all_soldiers = (int)map[index].soldier;
+    attacks_struct* local_attacks = map[index].attacks;
+    while (local_attacks != NULL) {
+        if (local_attacks->finished == false) {
+            all_soldiers = all_soldiers + local_attacks->soldiers/10;
+        }
+        local_attacks = local_attacks->next_attack;
+    }
+    /*
+    if (map[index].color_index != 8 && map[index].color_index != 9) {
+        printf("You have %d soldiers in land %d that has %d color index\n", all_soldiers, index,map[index].color_index);
+    }
+    */
+    return all_soldiers;
+
+}
+
+void battle(hexagonal map[HEXAGON_COUNT], matrix_unit main_matrix[SCREEN_HEIGHT/MAIN_MATRIX_UNITS_COUNT][SCREEN_HEIGHT/MAIN_MATRIX_UNITS_COUNT], int i, int j, int k) {
+    int id_dis = X_Y_to_hexagon(main_matrix[i][j].local_soldiers[k].X_d, main_matrix[i][j].local_soldiers[k].Y_d);
+    id_dis--;
+    //printf ("Hi, I'm in %d with %f soldiers\n", id_dis, map[id_dis].soldier);
+    if (map[id_dis].color_index == main_matrix[i][j].local_soldiers[k].land_id) {
+        //printf ("%d - %d\n", map[id_dis].color_index, main_matrix[i][j].local_soldiers[k].land_id);
+        map[id_dis].soldier++;
+        return;
+    }
+    int all_soldiers = all_soldiers_count_in_one_land(map, id_dis);
+    if (all_soldiers > 0) {
+        //printf ("2\n");
+        map[id_dis].soldier--;
+        return;
+    }
+    //printf ("3\n");
+    //printf ("%d - %d\n", map[id_dis].color_index, main_matrix[i][j].local_soldiers[k].land_id);
+    map[id_dis].color_index = main_matrix[i][j].local_soldiers[k].land_id;
+    //printf ("%d - %d\n", map[id_dis].color_index, main_matrix[i][j].local_soldiers[k].land_id);
+    map[id_dis].soldier = 1;
+    map[id_dis].potion_id = -1;
+    map[id_dis].is_d = false;
+    map[id_dis].is_s = false;
+    attacks_struct* local_attacks = map[id_dis].attacks;
+    /*
+    attacks_struct* temp_attack;
+    while (local_attacks->next_attack != NULL) {
+        temp_attack = local_attacks->next_attack;
+        free(local_attacks);
+        local_attacks = temp_attack;
+    }
+    */
+
+    while (local_attacks != NULL) {
+        local_attacks->finished = true;
+        local_attacks = local_attacks->next_attack;
+    }
+    return;
+
+}
+
+bool is_attack_source_valid(hexagonal map[HEXAGON_COUNT], int mouse_X, int mouse_Y, int* id_s_user) {
+    int id_s = X_Y_to_hexagon(mouse_X, mouse_Y);
+    id_s--;
+    *(id_s_user) = id_s;
+
+    if (map[id_s].color_index == 0) {
+        return true;
+    }
+
+    return false;
+
+}
+
+bool is_attack_dis_valid(hexagonal map[HEXAGON_COUNT], int mouse_X, int mouse_Y, int id_s_user, int* id_d_user) {
+    int id_d = X_Y_to_hexagon(mouse_X, mouse_Y);
+    id_d--;
+    *(id_d_user) = id_d;
+
+    if (map[id_d].color_index == 9 || id_s_user == *(id_d_user)) {
+        return false;
+    }
+
+    return true;
+
 }
 
 
