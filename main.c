@@ -24,6 +24,7 @@ const int HEXAGON_SIDE = (HEXAGON_h/(2*0.866025))/1 + 1;
 int HEXAGON_COUNT = 85;
 int NUMBER_OF_PLAYERS = 6;
 int MAIN_MATRIX_UNITS_COUNT = 10;
+int SOLDIER_GENERATOR_RATE = 7;
 //const int HEXAGON_COUNT = ((SCREEN_WIDTH/(3*HEXAGON_SIDE))*(CELL_NUM + CELL_NUM - 1) + CELL_NUM);
 
 
@@ -72,6 +73,7 @@ typedef struct game_Potions{
 
 // Soldier
 typedef struct game_soldier{
+    //potion* soldier_potion;
     float X;
     float Y;
     float V_x;
@@ -103,6 +105,22 @@ void drawCircle(SDL_Renderer *sdlRenderer, int x_int, int y_int, Uint32 color) {
     Sint16 radius = HEXAGON_SIDE/3;
     filledCircleColor(sdlRenderer, X, Y, radius, color);
 }
+void drawBox(SDL_Renderer *sdlRenderer, int x, int y, Uint32 color) {
+    Sint16 X = (Sint16)x;
+    Sint16 Y = (Sint16)y;
+    Sint16 D = 2*HEXAGON_SIDE/4;
+    boxColor(sdlRenderer, X-D/2, Y-D/2, X+D/2, Y+D/2, color);
+}
+void drawTri(SDL_Renderer *sdlRenderer, int x, int y, Uint32 color) {
+    Sint16 D = 2*HEXAGON_SIDE/3;
+    Sint16 X1 = (Sint16)x;
+    Sint16 Y1 = (Sint16)(y - D/2);
+    Sint16 X2 = (Sint16)(x + 0.866025*D/2);
+    Sint16 Y2 = (Sint16)(y + D/2);
+    Sint16 X3 = (Sint16)(x - 0.866025*D/2);
+    Sint16 Y3 = (Sint16)(y + D/2);
+    filledTrigonColor(sdlRenderer, X1, Y1, X2, Y2, X3, Y3, color);
+}
 
 
 
@@ -110,7 +128,8 @@ void drawCircle(SDL_Renderer *sdlRenderer, int x_int, int y_int, Uint32 color) {
 // important function prototypes
 // map
 void read_file(FILE* file_ptr, hexagonal map[HEXAGON_COUNT], Uint32 hexagonal_colors[HEXAGON_COUNT], Uint32 map_colors[10]);
-void drawHexagon(SDL_Renderer *sdlRenderer, int xcounter, int ycounter, Uint32 hexagon_color, int soldiers);
+void drawShape(SDL_Renderer * sdlRenderer, int xcounter, int ycounter, Uint32 hexagon_color, Uint32 map_colors[10]);
+void drawHexagon(SDL_Renderer *sdlRenderer, int xcounter, int ycounter, Uint32 hexagon_color, int soldiers, Uint32 map_colors[10]);
 void drawHexagonalMap(SDL_Renderer *sdlRenderer, hexagonal map[HEXAGON_COUNT], Uint32 map_colors[10]);
 // menu
 // main menu
@@ -126,6 +145,8 @@ void score_to_score_in_scoreboard(char temp_username_in_scoreboard_menu_score[9]
 void fill_strings_for_ranks_and_scores(score_board_struct* users_ptr, int user_counter);
 void writing_on_scoreboard(SDL_Renderer * sdlScoreboardRenderer, score_board_struct* users_head_ptr, int user_counter);
 int Which_item_selected_in_scoreboard(int X_of_mouse, int Y_of_mouse, Uint16 X_item1, Uint16 Y_item1,Uint16 H_items, Uint16 W_items, Uint16 D_items);
+
+
 int Scoreboard_manu(SDL_Renderer* sdlScoreboardRenderer);
 // logic
 int Delta_D_calculator(int X1, int Y1, int X2, int Y2);
@@ -135,11 +156,17 @@ int AI(int X_s, int Y_s, hexagonal map[HEXAGON_COUNT], int* X_dis, int* Y_dis, i
 void filling_main_matrix_for_attacks(matrix_unit main_matrix[60][60], hexagonal map[HEXAGON_COUNT], int X_dis, int Y_dis, int i, int j);
 void first_initialization_of_main_matrix(matrix_unit main_matrix[SCREEN_HEIGHT/MAIN_MATRIX_UNITS_COUNT][SCREEN_HEIGHT/MAIN_MATRIX_UNITS_COUNT]);
 void soldier_generator_in_attacks(hexagonal map[HEXAGON_COUNT], matrix_unit main_matrix[SCREEN_HEIGHT/MAIN_MATRIX_UNITS_COUNT][SCREEN_HEIGHT/MAIN_MATRIX_UNITS_COUNT], int i);
+int drawSoldiers(SDL_Renderer * sdlRenderer, int x, int y, int d, Uint32 color, Uint32 map_colors[10]);
 void set_new_attack(hexagonal map[HEXAGON_COUNT], matrix_unit main_matrix[SCREEN_HEIGHT/MAIN_MATRIX_UNITS_COUNT][SCREEN_HEIGHT/MAIN_MATRIX_UNITS_COUNT], int i, int* X_dis, int* Y_dis, int id_dis);
 int all_soldiers_count_in_one_land(hexagonal map[HEXAGON_COUNT], int index);
 void battle(hexagonal map[HEXAGON_COUNT], matrix_unit main_matrix[SCREEN_HEIGHT/MAIN_MATRIX_UNITS_COUNT][SCREEN_HEIGHT/MAIN_MATRIX_UNITS_COUNT], int i, int j, int k);
 bool is_attack_source_valid(hexagonal map[HEXAGON_COUNT], int mouse_X, int mouse_Y, int* id_s_user);
 bool is_attack_dis_valid(hexagonal map[HEXAGON_COUNT], int mouse_X, int mouse_Y, int id_s_user, int* id_d_user);
+bool game_end_check(hexagonal map[HEXAGON_COUNT], matrix_unit main_matrix[SCREEN_HEIGHT/MAIN_MATRIX_UNITS_COUNT][SCREEN_HEIGHT/MAIN_MATRIX_UNITS_COUNT], bool* game_finished);
+bool find_new_username_in_scoreboard(struct users_in_score_board* users_head_ptr, int user_counter, char username[100]);
+void add_score(struct users_in_score_board* users_head_ptr, int user_counter, char username[100], bool user_won);
+void user_w_or_l_menu(SDL_Renderer * sdlUserWonRenderer, bool user_won);
+
 
 
 
@@ -216,12 +243,33 @@ int main() {
 
     // saving username
     char scoreboard_name[] = "scoreboard.txt";
-    FILE* scoreboard_ptr = fopen(scoreboard_name, "a");
-    fprintf (scoreboard_ptr, "%s\n%d\n", username, 0);
+    // reading scoreboard
+    int user_counter = user_count_in_scoreboard();
+    score_board_struct* users_head_ptr = NULL;
+    score_board_struct* users_ptr = NULL;
+    users_head_ptr = (score_board_struct*)malloc(user_counter*sizeof(score_board_struct));
+    read_score_board_file(users_head_ptr, user_counter);
+    // finding username in scoreboard file
+    bool new_username = find_new_username_in_scoreboard(users_head_ptr, user_counter, username);
+    if (new_username == true) {
+        FILE *scoreboard_ptr = fopen(scoreboard_name, "a");
+        printf ("NEW USERNAME\n");
+        users_ptr = users_head_ptr;
+        for (int i=0; i<user_counter; i++) {
+            if ( i != user_counter-1) {
+                users_ptr = users_ptr->next_user;
+            }
+        }
+        users_ptr->next_user = (score_board_struct*) malloc(sizeof(score_board_struct));
+        users_ptr = users_ptr->next_user;
+        users_ptr->score = 0;
+        strcpy(users_ptr->name, username);
+        user_counter++;
+        fprintf(scoreboard_ptr, "%s\n%d\n", username, 0);
+        fclose(scoreboard_ptr);
+    }
 
     puts(username);
-
-
 
 
 
@@ -267,6 +315,10 @@ int main() {
     int soldier_count_in_lands = 0;
     attacks_struct* local_attacks = NULL;
 
+    // variables for end of the game
+    bool game_finished = false;
+    bool user_won = false;
+
     // logical variables for AI and attack
     int X_dis = 0;
     int Y_dis = 0;
@@ -274,6 +326,8 @@ int main() {
     bool attack_valid = false;
     int id_s_user = 0;
     int id_d_user = 0;
+
+
 
 
     SDL_bool shallExit = SDL_FALSE;
@@ -325,7 +379,9 @@ int main() {
             }
             if (rand()%500 == 50) {
                 id_dis = AI(map[i].X, map[i].Y, map, &X_dis, &Y_dis, i);
-                set_new_attack(map, main_matrix, i, &X_dis, &Y_dis, id_dis);
+                if (map[id_dis].color_index != 9) {
+                    set_new_attack(map, main_matrix, i, &X_dis, &Y_dis, id_dis);
+                }
             }
         }
 
@@ -364,7 +420,7 @@ int main() {
                 for (int k=0; k<8; k++) {
                     if (main_matrix[i][j].local_soldiers[k].X != 0) {
                         //filledCircleColor(sdlRenderer, 10*i+5, 10*j+5, 5, map_colors[main_matrix[i][j].local_soldiers[k].land_id]);
-                        filledCircleColor(sdlRenderer, main_matrix[i][j].local_soldiers[k].X/10*10+5, main_matrix[i][j].local_soldiers[k].Y/10*10+5, 5, map_colors[main_matrix[i][j].local_soldiers[k].land_id]); // 0xfff00fff Pink
+                        drawSoldiers(sdlRenderer, main_matrix[i][j].local_soldiers[k].X/10*10+5, main_matrix[i][j].local_soldiers[k].Y/10*10+5, 5, map_colors[main_matrix[i][j].local_soldiers[k].land_id], map_colors); // 0xfff00fff Pink
                         // checking if you arrived
                         if (pow(Delta_D_calculator(main_matrix[i][j].local_soldiers[k].X, main_matrix[i][j].local_soldiers[k].Y, main_matrix[i][j].local_soldiers[k].X_d, main_matrix[i][j].local_soldiers[k].Y_d), 0.5)<= HEXAGON_SIDE/3) {
                             battle(map, main_matrix, i, j, k);
@@ -433,9 +489,26 @@ int main() {
         }
         first_initialization_of_main_matrix(main_matrix_temp);
 
+
+
+
         // rendering
         SDL_RenderPresent(sdlRenderer);
         SDL_Delay(1000 / FPS);
+
+        // check if user won
+        if (game_finished && user_won) {
+            printf ("Game finished and you won\n");
+            SDL_Delay(1000);
+            shallExit = SDL_TRUE;
+        }
+        else if (game_finished && !user_won) {
+            printf ("Khak too sar-e bozet bokonan ke as computer bakhti osgol\n");
+            SDL_Delay(1000);
+            shallExit = SDL_TRUE;
+        }
+        user_won = game_end_check(map, main_matrix, &game_finished);
+
 
         // event handling
         SDL_Event sdlEvent;
@@ -447,23 +520,27 @@ int main() {
                 case SDL_MOUSEBUTTONDOWN:
                     if (sdlEvent.button.button == SDL_BUTTON_LEFT) {
                         SDL_GetMouseState(&mouse_X, &mouse_Y);
-                        attack_valid = is_attack_source_valid(map, mouse_X, mouse_Y, &id_s_user);
-                        //printf ("You clicked on X %d, Y %d, id %d\n", mouse_X, mouse_Y, X_Y_to_hexagon(mouse_X, mouse_Y));
-                        //printf ("Color of your clicked hexagon is in index %d\n", map[X_Y_to_hexagon(mouse_X, mouse_Y)-1].color_index);
+                        if (game_finished == false) {
+                            attack_valid = is_attack_source_valid(map, mouse_X, mouse_Y, &id_s_user);
+                            printf("You clicked on X %d, Y %d, id %d\n", mouse_X, mouse_Y,X_Y_to_hexagon(mouse_X, mouse_Y));
+                            printf("Color of your clicked hexagon is in index %d\n",map[X_Y_to_hexagon(mouse_X, mouse_Y) - 1].color_index);
+                        }
                     }
                     break;
                 case SDL_MOUSEBUTTONUP:
                     if (sdlEvent.button.button == SDL_BUTTON_LEFT) {
                         SDL_GetMouseState(&mouse_X, &mouse_Y);
-                        attack_valid = attack_valid * is_attack_dis_valid(map, mouse_X, mouse_Y, id_s_user, &id_d_user);
-                        if (attack_valid) {
-                            printf("Googooli-e man, dorost hamle kardi\n");
-                            X_dis = map[id_d_user].X;
-                            Y_dis = map[id_d_user].Y;
-                            set_new_attack(map, main_matrix, id_s_user, &X_dis, &Y_dis, id_d_user);
-                        }
-                        else {
-                            printf ("Dorost hamle kon olagh\n");
+                        if (game_finished == false) {
+                            attack_valid =attack_valid * is_attack_dis_valid(map, mouse_X, mouse_Y, id_s_user, &id_d_user);
+                            if (attack_valid) {
+                                //printf("Googooli-e man, dorost hamle kardi\n");
+                                X_dis = map[id_d_user].X;
+                                Y_dis = map[id_d_user].Y;
+                                set_new_attack(map, main_matrix, id_s_user, &X_dis, &Y_dis, id_d_user);
+                            }
+                            else {
+                                //printf ("Dorost hamle kon olagh\n");
+                            }
                         }
                     }
             }
@@ -471,6 +548,12 @@ int main() {
     }
 
     fclose(file_ptr);
+
+    if (game_finished == true) {
+        add_score(users_head_ptr, user_counter, username, user_won);
+        user_w_or_l_menu(sdlRenderer, user_won);
+    }
+
 
     SDL_Delay(100);
     SDL_DestroyRenderer(sdlRenderer);
@@ -525,7 +608,24 @@ void read_file(FILE* file_ptr, hexagonal map[HEXAGON_COUNT], Uint32 hexagonal_co
 
 }
 
-void drawHexagon(SDL_Renderer *sdlRenderer, int xcounter, int ycounter, Uint32 hexagon_color, int soldiers) {
+
+void drawShape(SDL_Renderer * sdlRenderer, int xcounter, int ycounter, Uint32 hexagon_color, Uint32 map_colors[10]) {
+
+    if (hexagon_color == map_colors[0] || hexagon_color == map_colors[5] || hexagon_color == map_colors[8]) {
+        drawCircle(sdlRenderer, xcounter, ycounter, hexagon_color);
+        return;
+    }
+    else if (hexagon_color == map_colors[1] || hexagon_color == map_colors[3] || hexagon_color == map_colors[6]) {
+        drawBox(sdlRenderer, xcounter, ycounter, hexagon_color);
+        return;
+    }
+    else {
+        drawTri(sdlRenderer, xcounter, ycounter, hexagon_color);
+    }
+    return;
+}
+
+void drawHexagon(SDL_Renderer *sdlRenderer, int xcounter, int ycounter, Uint32 hexagon_color, int soldiers, Uint32 map_colors[10]) {
 
     char number_of_soldiers[9] = {0};
     score_to_score_in_scoreboard(number_of_soldiers, soldiers);
@@ -534,7 +634,7 @@ void drawHexagon(SDL_Renderer *sdlRenderer, int xcounter, int ycounter, Uint32 h
     Sint16 Y[6] = {(Sint16)(ycounter+HEXAGON_SIDE*0.866025), (Sint16)(ycounter), (Sint16)(ycounter-HEXAGON_SIDE*0.866025), (Sint16)(ycounter-HEXAGON_SIDE*0.866025), (Sint16)(ycounter), (Sint16)(ycounter+HEXAGON_SIDE*0.866025)};
     if (hexagon_color != 0xffffff00) {
         filledPolygonColor(sdlRenderer, X, Y, 6, hexagon_color - 0x4f000000);
-        drawCircle(sdlRenderer, xcounter, ycounter, hexagon_color);
+        drawShape(sdlRenderer, xcounter, ycounter, hexagon_color, map_colors);
         stringColor(sdlRenderer, xcounter-8, ycounter+15, number_of_soldiers, 0xff000000);
 
     }
@@ -555,7 +655,7 @@ void drawHexagonalMap(SDL_Renderer *sdlRenderer, hexagonal map[HEXAGON_COUNT], U
     while (xcounter < (SCREEN_WIDTH+(HEXAGON_h/2))) {
 
         while (ycounter<(SCREEN_HEIGHT+(HEXAGON_h/2))) {
-            drawHexagon(sdlRenderer, xcounter, ycounter, map_colors[map[hexagon_counter].color_index],all_soldiers_count_in_one_land(map, hexagon_counter));
+            drawHexagon(sdlRenderer, xcounter, ycounter, map_colors[map[hexagon_counter].color_index],all_soldiers_count_in_one_land(map, hexagon_counter), map_colors);
             //printf ("X is: %d , Y is: %d\n", xcounter, ycounter);
             hexagon_counter++;
             ycounter = ycounter + HEXAGON_h;
@@ -570,7 +670,7 @@ void drawHexagonalMap(SDL_Renderer *sdlRenderer, hexagonal map[HEXAGON_COUNT], U
     while (xcounter < (SCREEN_WIDTH+(HEXAGON_h/2))) {
 
         while (ycounter<(SCREEN_HEIGHT+(HEXAGON_h/2))) {
-            drawHexagon(sdlRenderer, xcounter, ycounter, map_colors[map[hexagon_counter].color_index],all_soldiers_count_in_one_land(map, hexagon_counter));
+            drawHexagon(sdlRenderer, xcounter, ycounter, map_colors[map[hexagon_counter].color_index],all_soldiers_count_in_one_land(map, hexagon_counter), map_colors);
             //printf("X is: %d , Y is: %d\n", xcounter, ycounter);
             hexagon_counter++;
             ycounter = ycounter + HEXAGON_h;
@@ -583,6 +683,8 @@ void drawHexagonalMap(SDL_Renderer *sdlRenderer, hexagonal map[HEXAGON_COUNT], U
 
     //printf ("Hexagons = %d\n", hexagon_counter);
 }
+
+
 
 
 
@@ -896,6 +998,9 @@ void sort_score_board_file(score_board_struct* users_ptr, int user_counter) {
 
     }
 
+    free(temp_i);
+    free(temp_j);
+
     return;
 }
 
@@ -1174,6 +1279,8 @@ int Scoreboard_manu(SDL_Renderer* sdlScoreboardRenderer) {
         SDL_Delay(1000 / FPS);
     }
 
+    free(users_head_ptr);
+
 
     SDL_Delay(100);
     SDL_DestroyTexture(score_board_texture);
@@ -1286,6 +1393,7 @@ int potion_generator(SDL_Renderer * sdlRenderer, int* X_of_potion, int* Y_of_pot
 
 int AI(int X_s, int Y_s, hexagonal map[HEXAGON_COUNT], int* X_dis, int* Y_dis, int myID) {
 
+    //printf ("%d\n", myID);
     int smallest_Delta_D = 100*100;
     int Delta_D;
     for (int i=0; i<HEXAGON_COUNT; i++) {
@@ -1303,18 +1411,22 @@ int AI(int X_s, int Y_s, hexagonal map[HEXAGON_COUNT], int* X_dis, int* Y_dis, i
 
     }
 
-    if (smallest_Delta_D != 100*100) {
+    int temp_id = X_Y_to_hexagon(*(X_dis), *(Y_dis)) - 1;
+
+    if (smallest_Delta_D != 100*100 && map[temp_id].color_index != 9) {
         //printf ("X_dis is %d, Y_dis is %d but I'm %d and %d\n", *(X_dis), *(Y_dis), X_s, Y_s);
         //printf ("%d - %d\n", map[X_Y_to_hexagon(*(X_dis), *(Y_dis))-1].color_index, X_Y_to_hexagon(*(X_dis), *(Y_dis))-1);
-        return X_Y_to_hexagon(*(X_dis), *(Y_dis));
+        return temp_id;
     }
+
+    int my_soldiers = (int)map[myID].soldier;
 
     smallest_Delta_D = 300*300;
     for (int i=0; i<HEXAGON_COUNT; i++) {
         if (map[i].color_index == 9 || (map[i].X == X_s && map[i].Y == Y_s)) {
             continue;
         }
-        if (map[i].is_d == false && map[i].color_index != 9 && map[i].color_index != myID) {
+        if (map[i].is_d == false && map[i].color_index != 9 && map[i].color_index != map[myID].color_index && map[i].soldier < (float)my_soldiers) {
             Delta_D = Delta_D_calculator(X_s, Y_s, map[i].X, map[i].Y);
             if (Delta_D < smallest_Delta_D) {
                 *(X_dis) = map[i].X;
@@ -1322,13 +1434,19 @@ int AI(int X_s, int Y_s, hexagonal map[HEXAGON_COUNT], int* X_dis, int* Y_dis, i
                 smallest_Delta_D = Delta_D;
             }
         }
+        if (map[i].color_index == 0 && Delta_D<= 150*150) {
+            Delta_D = Delta_D_calculator(X_s, Y_s, map[i].X, map[i].Y);
+            *(X_dis) = map[i].X;
+            *(Y_dis) = map[i].Y;
+            return X_Y_to_hexagon(*(X_dis), *(Y_dis)) - 1;
+        }
 
     }
 
     if (smallest_Delta_D != 300*300) {
         //printf ("X_dis is %d, Y_dis is %d but I'm %d and %d\n", *(X_dis), *(Y_dis), X_s, Y_s);
         //printf ("%d - %d\n", map[X_Y_to_hexagon(*(X_dis), *(Y_dis))-1].color_index, X_Y_to_hexagon(*(X_dis), *(Y_dis))-1);
-        return X_Y_to_hexagon(*(X_dis), *(Y_dis));
+        return X_Y_to_hexagon(*(X_dis), *(Y_dis)) - 1;
     }
 
     if (map[X_Y_to_hexagon(X_s, Y_s - HEXAGON_h)-1].color_index != 9) {
@@ -1373,22 +1491,21 @@ void first_initialization_of_main_matrix(matrix_unit main_matrix[SCREEN_HEIGHT/M
 
 void soldier_generator_in_attacks(hexagonal map[HEXAGON_COUNT], matrix_unit main_matrix[SCREEN_HEIGHT/MAIN_MATRIX_UNITS_COUNT][SCREEN_HEIGHT/MAIN_MATRIX_UNITS_COUNT], int i) {
     attacks_struct* local_attacks = map[i].attacks;
-    //int count = 0;
+    int count = 0;
     while (local_attacks != NULL) {
+        count++;
         //printf ("%d is not NULL\n", map[i].color_index);
         if (local_attacks->finished == false) {
+
             local_attacks->soldiers--;
-            if (local_attacks->soldiers % 10 == 0) {
+            if (local_attacks->soldiers % SOLDIER_GENERATOR_RATE == 0) {
                 //printf ("You have %d soldiers in %d land\n", local_attacks->soldiers/10, i);
                 for (int j = 0; j < 8; j++) {
-                    if (main_matrix[map[i].X / MAIN_MATRIX_UNITS_COUNT][map[i].Y /
-                                                                        MAIN_MATRIX_UNITS_COUNT].local_soldiers[j].X ==
-                        0) {
+                    if (main_matrix[map[i].X / MAIN_MATRIX_UNITS_COUNT][map[i].Y /MAIN_MATRIX_UNITS_COUNT].local_soldiers[j].X ==0) {
                         //printf("You are going to X = %d, Y = %d\n", local_attacks->X_dis, local_attacks->Y_dis);
                         //count++;
                         //printf ("Count is: %d\n", count);
-                        filling_main_matrix_for_attacks(main_matrix, map, local_attacks->X_dis,
-                                                        local_attacks->Y_dis, i, j);
+                        filling_main_matrix_for_attacks(main_matrix, map, local_attacks->X_dis,local_attacks->Y_dis, i, j);
                         map[local_attacks->id_dis].is_d = true;
                         break;
                     }
@@ -1403,6 +1520,29 @@ void soldier_generator_in_attacks(hexagonal map[HEXAGON_COUNT], matrix_unit main
     }
 
     return;
+}
+
+int drawSoldiers(SDL_Renderer * sdlRenderer, int x, int y, int d, Uint32 color, Uint32 map_colors[10]) {
+    Sint16 X = (Sint16)x;
+    Sint16 Y = (Sint16)y;
+    if (color == map_colors[0] || color == map_colors[5]) {
+        filledCircleColor(sdlRenderer, X, Y, d, color);
+        return 0;
+    }
+    else if (color == map_colors[1] ||color == map_colors[3] || color == map_colors[6]) {
+        boxColor(sdlRenderer, X-d, Y-d, X+d, Y+d, color);
+        return 0;
+    }
+    else {
+        Sint16 X1 = (Sint16)x;
+        Sint16 Y1 = (Sint16)(y - d);
+        Sint16 X2 = (Sint16)(x + 0.866025*d);
+        Sint16 Y2 = (Sint16)(y + d);
+        Sint16 X3 = (Sint16)(x - 0.866025*d);
+        Sint16 Y3 = (Sint16)(y + d);
+        filledTrigonColor(sdlRenderer, X1, Y1, X2, Y2, X3, Y3, color);
+    }
+    return 0;
 }
 
 void set_new_attack(hexagonal map[HEXAGON_COUNT], matrix_unit main_matrix[SCREEN_HEIGHT/MAIN_MATRIX_UNITS_COUNT][SCREEN_HEIGHT/MAIN_MATRIX_UNITS_COUNT], int i, int* X_dis, int* Y_dis, int id_dis) {
@@ -1423,7 +1563,7 @@ void set_new_attack(hexagonal map[HEXAGON_COUNT], matrix_unit main_matrix[SCREEN
     local_attacks->next_attack = (attacks_struct*)malloc(sizeof(attacks_struct));
     local_attacks = local_attacks->next_attack;
     local_attacks->next_attack = NULL;
-    local_attacks->soldiers = 10*map[i].soldier;
+    local_attacks->soldiers = SOLDIER_GENERATOR_RATE*map[i].soldier;
     map[i].soldier = 0;
     local_attacks->Y_dis = *(Y_dis);
     local_attacks->X_dis = *(X_dis);
@@ -1436,7 +1576,7 @@ int all_soldiers_count_in_one_land(hexagonal map[HEXAGON_COUNT], int index) {
     attacks_struct* local_attacks = map[index].attacks;
     while (local_attacks != NULL) {
         if (local_attacks->finished == false) {
-            all_soldiers = all_soldiers + local_attacks->soldiers/10;
+            all_soldiers = all_soldiers + local_attacks->soldiers/SOLDIER_GENERATOR_RATE;
         }
         local_attacks = local_attacks->next_attack;
     }
@@ -1515,6 +1655,215 @@ bool is_attack_dis_valid(hexagonal map[HEXAGON_COUNT], int mouse_X, int mouse_Y,
     return true;
 
 }
+
+bool game_end_check(hexagonal map[HEXAGON_COUNT], matrix_unit main_matrix[SCREEN_HEIGHT/MAIN_MATRIX_UNITS_COUNT][SCREEN_HEIGHT/MAIN_MATRIX_UNITS_COUNT], bool* game_finished) {
+
+    int user_land_count = 0;
+    int comp_land_count = 0;
+    int user_soldier_count = 0;
+    int comp_soldier_count = 0;
+    for (int i=0; i<HEXAGON_COUNT; i++) {
+        if (map[i].color_index == 0) {
+            user_land_count++;
+        }
+        else if(map[i].color_index != 8 && map[i].color_index != 9) {
+            comp_land_count++;
+        }
+    }
+
+    if (comp_land_count * user_land_count != 0) {
+        *(game_finished) = false;
+        return false;
+    }
+    for (int i=0; i<SCREEN_HEIGHT/MAIN_MATRIX_UNITS_COUNT; i++) {
+        for (int j=0; j<SCREEN_WIDTH/MAIN_MATRIX_UNITS_COUNT; j++) {
+            for (int k=0; k<8; k++) {
+                if (main_matrix[i][j].local_soldiers[k].X != 0) {
+                    if (main_matrix[i][j].local_soldiers[k].land_id == 0) {
+                        user_soldier_count++;
+                    }
+                    else if(main_matrix[i][j].local_soldiers[k].land_id != 8 && main_matrix[i][j].local_soldiers[k].land_id != 9) {
+                        comp_soldier_count++;
+                    }
+                }
+            }
+        }
+    }
+
+    if (comp_land_count == 0 && comp_soldier_count == 0) {
+        *(game_finished) = true;
+        return true;
+    }
+    else if (user_land_count == 0 && user_soldier_count == 0) {
+        *(game_finished) = true;
+        return false;
+    }
+    *(game_finished) = false;
+    return false;
+}
+
+bool find_new_username_in_scoreboard(struct users_in_score_board* users_head_ptr, int user_counter, char username[100]) {
+    if (users_head_ptr == NULL) {
+        return true;
+    }
+
+    score_board_struct* temp_i;
+    temp_i = users_head_ptr;
+
+    for (int i=0; i<user_counter; i++) {
+        if (strcmp(temp_i->name, username) == 0) {
+            return false;
+        }
+        temp_i = temp_i->next_user;
+
+    }
+
+    free(temp_i);
+
+    return true;
+}
+
+void add_score(struct users_in_score_board* users_head_ptr, int user_counter, char username[100], bool user_won) {
+
+    score_board_struct* temp_i;
+    temp_i = users_head_ptr;
+
+    char scoreboard_name[] = "scoreboard.txt";
+
+    FILE* file_ptr = fopen(scoreboard_name, "w");
+
+    for (int i=0; i<user_counter; i++) {
+        fprintf(file_ptr, "%s\n", temp_i->name);
+        if (strcmp(temp_i->name, username) == 0) {
+            if (user_won == true) {
+                temp_i->score+=45;
+            }
+            else {
+                temp_i->score-=30;
+            }
+        }
+        fprintf(file_ptr, "%d\n", temp_i->score);
+        temp_i = temp_i->next_user;
+
+    }
+
+    fclose(file_ptr);
+
+    free(temp_i);
+
+    return;
+}
+
+void user_w_or_l_menu(SDL_Renderer * sdlUserWonRenderer, bool user_won) {
+
+    // image of menu
+
+    char image_name1[100] = {0};
+    strcpy(image_name1, "usrwn1.bmp");
+    SDL_Surface *menu_image = SDL_LoadBMP(image_name1);
+    SDL_Texture *menu_texture = SDL_CreateTextureFromSurface(sdlUserWonRenderer, menu_image);
+    SDL_Rect menu_image_dstrect = {0, 0, SCREEN_WIDTH, SCREEN_HEIGHT};
+
+    char image_name2[100] = {0};
+    strcpy(image_name2, "usrwn2.bmp");
+    SDL_Surface *menu_image2 = SDL_LoadBMP(image_name2);
+    SDL_Texture *menu_texture2 = SDL_CreateTextureFromSurface(sdlUserWonRenderer, menu_image2);
+    SDL_Rect menu_image_dstrect2 = {SCREEN_WIDTH / 4, 40, SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2};
+
+    if (user_won == false) {
+        strcpy(image_name1, "usrls1.bmp");
+        menu_image = SDL_LoadBMP(image_name1);
+        menu_texture = SDL_CreateTextureFromSurface(sdlUserWonRenderer, menu_image);
+
+
+        strcpy(image_name2, "usrls2.bmp");
+        menu_image2 = SDL_LoadBMP(image_name2);
+        menu_texture2 = SDL_CreateTextureFromSurface(sdlUserWonRenderer, menu_image2);
+    }
+
+    // menu texts and variables
+    char text[] = "OK";
+    Uint32 item_box_color = 0xffAfAf00; // persian green
+    int X_of_mouse = 0;
+    int Y_of_mouse = 0;
+
+    SDL_bool shallExit = SDL_FALSE;
+    while (shallExit == SDL_FALSE) {
+        SDL_SetRenderDrawColor(sdlUserWonRenderer, 0x00, 0x00, 0x00, 0xff);
+        SDL_RenderClear(sdlUserWonRenderer);
+
+
+        // background image
+        SDL_RenderCopy(sdlUserWonRenderer, menu_texture, NULL, &menu_image_dstrect);
+        SDL_RenderCopy(sdlUserWonRenderer, menu_texture2, NULL, &menu_image_dstrect2);
+
+
+        // item boxes
+        Uint16 X_item1 = 280;
+        Uint16 Y_item1 = 500;
+        Uint16 W_items = 40;
+        Uint16 H_items = 40;
+
+
+        // drawing item boxes
+        boxColor(sdlUserWonRenderer, X_item1, Y_item1, X_item1+W_items, Y_item1+H_items, item_box_color);
+
+
+
+        // text in items
+        stringColor(sdlUserWonRenderer, X_item1+W_items/3, Y_item1+H_items/2 - 5, text, 0xff000000);
+
+
+        // item color change
+        SDL_GetMouseState(&X_of_mouse, &Y_of_mouse);
+        if (X_of_mouse >= X_item1 && X_of_mouse<= X_item1+W_items && Y_of_mouse>=Y_item1 && Y_of_mouse<=Y_item1+H_items) {
+            item_box_color = 0xffAfAf00 - 0xA1000000;
+        }
+        else {
+            item_box_color = 0xffAfAf00;
+        }
+
+
+
+        // event handling
+        SDL_Event sdlEvent;
+        while (SDL_PollEvent(&sdlEvent)) {
+            switch (sdlEvent.type) {
+                case SDL_QUIT:
+                    shallExit = SDL_TRUE;
+                    break;
+                case SDL_MOUSEBUTTONDOWN:
+                    if (sdlEvent.button.button == SDL_BUTTON_LEFT) {
+                        SDL_GetMouseState(&X_of_mouse, &Y_of_mouse);
+                        if (X_of_mouse >= X_item1 && X_of_mouse<= X_item1+W_items && Y_of_mouse>=Y_item1 && Y_of_mouse<=Y_item1+H_items) {
+                            shallExit = SDL_TRUE;
+                        }
+
+                    }
+                    break;
+            }
+
+        }
+
+        SDL_RenderPresent(sdlUserWonRenderer);
+        SDL_Delay(1000 / FPS);
+    }
+
+
+    SDL_Delay(100);
+    SDL_DestroyTexture(menu_texture);
+    SDL_FreeSurface(menu_image);
+    SDL_DestroyTexture(menu_texture2);
+    SDL_FreeSurface(menu_image2);
+    //SDL_DestroyRenderer(sdlMenuRenderer);
+    //SDL_DestroyWindow(sdlMenu);
+    SDL_RenderClear(sdlUserWonRenderer);
+}
+
+
+
+
+
 
 
 
