@@ -18,9 +18,13 @@
 
 
 //constant variables
-const int CELL_NUM = 6;
+int CELL_NUM = 0;
+int HEXAGON_h = 0;
+int HEXAGON_SIDE = 0;
+/*
 const int HEXAGON_h = (SCREEN_HEIGHT/CELL_NUM)/1 + 1;
 const int HEXAGON_SIDE = (HEXAGON_h/(2*0.866025))/1 + 1;
+ */
 int HEXAGON_COUNT = 85;
 int NUMBER_OF_PLAYERS = 6;
 int MAIN_MATRIX_UNITS_COUNT = 10;
@@ -41,6 +45,13 @@ typedef struct hexagonal_attacks{
     struct hexagonal_attacks* next_attack;
 } attacks_struct;
 
+// Potions
+typedef struct game_Potions{
+    int potion_time;
+    bool potion_in_use;
+    short potion_id;
+}potion;
+
 // for map
 typedef struct my_map_hexagonal{
     int color_index;
@@ -48,6 +59,7 @@ typedef struct my_map_hexagonal{
     int X;
     int Y;
     int potion_id;
+    potion land_potion;
     int soldier_speed;
     float rate;
     bool is_s;
@@ -64,16 +76,9 @@ typedef struct users_in_score_board{
     struct users_in_score_board* next_user;
 }score_board_struct;
 
-// Potions
-typedef struct game_Potions{
-    int potion_time;
-    bool potion_in_use;
-    short potion_id;
-}potion;
-
 // Soldier
 typedef struct game_soldier{
-    //potion* soldier_potion;
+    int potion_id;
     float X;
     float Y;
     float V_x;
@@ -86,6 +91,7 @@ typedef struct game_soldier{
 // matrix_units
 typedef struct matrix_unit{
     bool Potion;
+    bool center_of_potion;
     potion local_potion;
     soldier local_soldiers[8];
 }matrix_unit;
@@ -131,6 +137,14 @@ void read_file(FILE* file_ptr, hexagonal map[HEXAGON_COUNT], Uint32 hexagonal_co
 void drawShape(SDL_Renderer * sdlRenderer, int xcounter, int ycounter, Uint32 hexagon_color, Uint32 map_colors[10]);
 void drawHexagon(SDL_Renderer *sdlRenderer, int xcounter, int ycounter, Uint32 hexagon_color, int soldiers, Uint32 map_colors[10]);
 void drawHexagonalMap(SDL_Renderer *sdlRenderer, hexagonal map[HEXAGON_COUNT], Uint32 map_colors[10]);
+// random map generator
+void file_name_change(char file_name[7], int file_name_counter);
+int find_in_players_first_state_by_index(int number_of_players, int players_first_state[number_of_players][2], int X, int Y, int index);
+void players_first_state_generator(int number_of_players, int players_first_state[number_of_players][2]);
+int find_in_players_first_state(int number_of_players, int players_first_state[number_of_players][2], int X, int Y, int flag);
+void map_generator(int number_of_players, int players_first_state[number_of_players][2], FILE* map_ptr);
+int count_hexagons();
+void random_map_generator();
 // menu
 // main menu
 int Which_item_selected(int X_of_mouse, int Y_of_mouse, Uint16 X_item1, Uint16 Y_item1,Uint16 H_items, Uint16 W_items, Uint16 D_items);
@@ -145,13 +159,11 @@ void score_to_score_in_scoreboard(char temp_username_in_scoreboard_menu_score[9]
 void fill_strings_for_ranks_and_scores(score_board_struct* users_ptr, int user_counter);
 void writing_on_scoreboard(SDL_Renderer * sdlScoreboardRenderer, score_board_struct* users_head_ptr, int user_counter);
 int Which_item_selected_in_scoreboard(int X_of_mouse, int Y_of_mouse, Uint16 X_item1, Uint16 Y_item1,Uint16 H_items, Uint16 W_items, Uint16 D_items);
-
-
 int Scoreboard_manu(SDL_Renderer* sdlScoreboardRenderer);
 // logic
 int Delta_D_calculator(int X1, int Y1, int X2, int Y2);
 int X_Y_to_hexagon(int mouse_X, int mouse_Y);
-int potion_generator(SDL_Renderer * sdlRenderer, int* X_of_potion, int* Y_of_potion, hexagonal map[HEXAGON_COUNT]);
+int potion_generator(SDL_Renderer * sdlRenderer, int* X_of_potion, int* Y_of_potion, hexagonal map[HEXAGON_COUNT], matrix_unit main_matrix [SCREEN_WIDTH/MAIN_MATRIX_UNITS_COUNT][SCREEN_HEIGHT/MAIN_MATRIX_UNITS_COUNT]);
 int AI(int X_s, int Y_s, hexagonal map[HEXAGON_COUNT], int* X_dis, int* Y_dis, int myID);
 void filling_main_matrix_for_attacks(matrix_unit main_matrix[60][60], hexagonal map[HEXAGON_COUNT], int X_dis, int Y_dis, int i, int j);
 void first_initialization_of_main_matrix(matrix_unit main_matrix[SCREEN_HEIGHT/MAIN_MATRIX_UNITS_COUNT][SCREEN_HEIGHT/MAIN_MATRIX_UNITS_COUNT]);
@@ -159,6 +171,7 @@ void soldier_generator_in_attacks(hexagonal map[HEXAGON_COUNT], matrix_unit main
 int drawSoldiers(SDL_Renderer * sdlRenderer, int x, int y, int d, Uint32 color, Uint32 map_colors[10]);
 void set_new_attack(hexagonal map[HEXAGON_COUNT], matrix_unit main_matrix[SCREEN_HEIGHT/MAIN_MATRIX_UNITS_COUNT][SCREEN_HEIGHT/MAIN_MATRIX_UNITS_COUNT], int i, int* X_dis, int* Y_dis, int id_dis);
 int all_soldiers_count_in_one_land(hexagonal map[HEXAGON_COUNT], int index);
+void potion_add_to_conquered_land(hexagonal map[HEXAGON_COUNT], int id_dis, soldier local_soldiers);
 void battle(hexagonal map[HEXAGON_COUNT], matrix_unit main_matrix[SCREEN_HEIGHT/MAIN_MATRIX_UNITS_COUNT][SCREEN_HEIGHT/MAIN_MATRIX_UNITS_COUNT], int i, int j, int k);
 bool is_attack_source_valid(hexagonal map[HEXAGON_COUNT], int mouse_X, int mouse_Y, int* id_s_user);
 bool is_attack_dis_valid(hexagonal map[HEXAGON_COUNT], int mouse_X, int mouse_Y, int id_s_user, int* id_d_user);
@@ -166,6 +179,12 @@ bool game_end_check(hexagonal map[HEXAGON_COUNT], matrix_unit main_matrix[SCREEN
 bool find_new_username_in_scoreboard(struct users_in_score_board* users_head_ptr, int user_counter, char username[100]);
 void add_score(struct users_in_score_board* users_head_ptr, int user_counter, char username[100], bool user_won);
 void user_w_or_l_menu(SDL_Renderer * sdlUserWonRenderer, bool user_won);
+bool check_potion_in_use(int land_id_of_soldier, hexagonal map[HEXAGON_COUNT]);
+void add_potion_to_land_and_soldiers(hexagonal map[HEXAGON_COUNT], matrix_unit main_matrix[SCREEN_HEIGHT/MAIN_MATRIX_UNITS_COUNT][SCREEN_HEIGHT/MAIN_MATRIX_UNITS_COUNT], int land_id_of_soldier, int index_i, int index_j);
+void delete_potion_from_land_and_soldiers(hexagonal map[HEXAGON_COUNT], matrix_unit main_matrix[SCREEN_HEIGHT/MAIN_MATRIX_UNITS_COUNT][SCREEN_HEIGHT/MAIN_MATRIX_UNITS_COUNT], int land_id, int potion_id, int index);
+void add_potion_to_main_matrix_as_index(matrix_unit main_matrix[SCREEN_HEIGHT/MAIN_MATRIX_UNITS_COUNT][SCREEN_HEIGHT/MAIN_MATRIX_UNITS_COUNT], int X_of_potion, int Y_of_potion);
+
+
 
 
 
@@ -272,6 +291,13 @@ int main() {
     puts(username);
 
 
+    // random map generator
+    if (item_selected_in_main_menu == 2) { /////////////////////// last game
+        random_map_generator();
+        return 0;
+    }
+
+
 
     // reading a map
     FILE* file_ptr;
@@ -279,6 +305,9 @@ int main() {
     if (file_ptr == NULL) {
         printf ("Error opening file. \n");
     }
+    fscanf(file_ptr, "%d\n", &CELL_NUM);
+    HEXAGON_h = (SCREEN_HEIGHT/CELL_NUM)/1 + 1;
+    HEXAGON_SIDE = (int)(HEXAGON_h/(2*0.866025))/1 + 1;
     fscanf(file_ptr, "%d\n", &HEXAGON_COUNT);
     fscanf(file_ptr, "%d\n", &NUMBER_OF_PLAYERS);
 
@@ -303,6 +332,7 @@ int main() {
     int X_of_potion;
     int Y_of_potion;
     int potion_flag;
+    long long int potion_count;
 
     // logic variables and first initializations for main matrix
     matrix_unit main_matrix[SCREEN_HEIGHT/MAIN_MATRIX_UNITS_COUNT][SCREEN_HEIGHT/MAIN_MATRIX_UNITS_COUNT];
@@ -332,6 +362,8 @@ int main() {
 
     SDL_bool shallExit = SDL_FALSE;
     while (shallExit == SDL_FALSE) {
+        //printf ("%lld\n", potion_count);
+        potion_count = 0;
 
         SDL_SetRenderDrawColor(sdlRenderer, 0x00, 0x00, 0x00, 0xff);
         SDL_RenderClear(sdlRenderer);
@@ -351,6 +383,19 @@ int main() {
                 } else {
                     map[i].soldier += map[i].rate;
                 }
+
+            }
+            // land potion time managing
+            if (map[i].potion_id != -1) {
+                map[i].land_potion.potion_time -= 10;
+                if (map[i].land_potion.potion_time <= 0) {
+                    //printf ("my_potion_finished ");
+                    delete_potion_from_land_and_soldiers(map, main_matrix, map[i].color_index, map[i].potion_id, i);
+                    //printf ("%d\n", map[i].potion_id);
+                }
+            }
+            if (map[i].potion_id != -1) {
+                //printf ("I have potion\n");
             }
             // attacks managing in lands
             if (map[i].color_index != 9 && map[i].color_index != 8) {
@@ -363,12 +408,9 @@ int main() {
 
 
         // potions
-        potion_flag = potion_generator(sdlRenderer, &X_of_potion, &Y_of_potion, map);
-        if (potion_flag == 1) {
-            main_matrix[X_of_potion][Y_of_potion].Potion = true;
-            main_matrix[X_of_potion][Y_of_potion].local_potion.potion_in_use = false;
-            main_matrix[X_of_potion][Y_of_potion].local_potion.potion_id = rand()%4;
-            main_matrix[X_of_potion][Y_of_potion].local_potion.potion_time = rand()%100000 + 1000;
+        potion_flag = potion_generator(sdlRenderer, &X_of_potion, &Y_of_potion, map, main_matrix);
+        if (potion_flag == 1 && main_matrix[X_of_potion][Y_of_potion].Potion == false) {
+            add_potion_to_main_matrix_as_index(main_matrix, X_of_potion, Y_of_potion);
         }
 
 
@@ -402,19 +444,16 @@ int main() {
             for (int j=0; j<SCREEN_HEIGHT/MAIN_MATRIX_UNITS_COUNT; j++) {
 
                 // drawing potions
+                if (main_matrix[i][j].Potion == true && main_matrix[i][j].center_of_potion == true) {
+                    filledCircleColor(sdlRenderer, (Sint16)(10*i+5), (Sint16)(10*j+5), 10, 0xffffffff);
+                }
+
                 /*
                 if (main_matrix[i][j].Potion == true) {
-                    if (main_matrix[i][j].local_potion.potion_time == 0) {
-                        main_matrix[i][j].Potion = false;
-                    }
-                    else {
-                        if (main_matrix[i][j].local_potion.potion_in_use == true) {
-                            main_matrix[i][j].local_potion.potion_time -= 100;
-                        }
-                        filledCircleColor(sdlRenderer, 10*i+5, 10*j+5, 5, 0xffffffff);
-                    }
+                    filledCircleColor(sdlRenderer, (Sint16)(10*i+5), (Sint16)(10*j+5), 5, 0xffffffff);
                 }
-                */
+                 */
+
 
                 // drawing soldiers and moving for next state
                 for (int k=0; k<8; k++) {
@@ -442,7 +481,7 @@ int main() {
         int conflict_checking = -1;
         for (int i=0; i<SCREEN_WIDTH/MAIN_MATRIX_UNITS_COUNT; i++) {
             for (int j=0; j<SCREEN_HEIGHT/MAIN_MATRIX_UNITS_COUNT; j++) {
-                main_matrix_temp[i][j].Potion = main_matrix[i][j].Potion;
+                //main_matrix_temp[i][j].Potion = main_matrix[i][j].Potion;
                 for (int k=0; k<8; k++) {
                     if (main_matrix[i][j].local_soldiers[k].X != 0) {
                         for (int b=0; b<8; b++) {
@@ -473,9 +512,15 @@ int main() {
         }
 
         // main matrix temp copy
+        bool free_unit = true;
+        bool potion_in_use = true;
+        int land_id_of_soldier = 9;
         for (int i=0; i<SCREEN_WIDTH/MAIN_MATRIX_UNITS_COUNT; i++) {
             for (int j = 0; j < SCREEN_HEIGHT / MAIN_MATRIX_UNITS_COUNT; j++) {
-                main_matrix[i][j].Potion = main_matrix_temp[i][j].Potion;
+                free_unit = true;
+                potion_in_use = true;
+                land_id_of_soldier = 9;
+                //main_matrix[i][j].Potion = main_matrix_temp[i][j].Potion;
                 for (int k=0; k<8; k++) {
                     main_matrix[i][j].local_soldiers[k].V_y = main_matrix_temp[i][j].local_soldiers[k].V_y;
                     main_matrix[i][j].local_soldiers[k].V_x = main_matrix_temp[i][j].local_soldiers[k].V_x;
@@ -484,8 +529,25 @@ int main() {
                     main_matrix[i][j].local_soldiers[k].X_d = main_matrix_temp[i][j].local_soldiers[k].X_d;
                     main_matrix[i][j].local_soldiers[k].Y_d = main_matrix_temp[i][j].local_soldiers[k].Y_d;
                     main_matrix[i][j].local_soldiers[k].land_id = main_matrix_temp[i][j].local_soldiers[k].land_id;
+                    if (main_matrix[i][j].local_soldiers[k].X != 0) {
+                        free_unit = false;
+                        land_id_of_soldier = main_matrix[i][j].local_soldiers[k].land_id;
+                    }
                 }
+                if (main_matrix[i][j].Potion == true) {
+                    potion_count++;
+                    if (free_unit == false) {
+                        potion_in_use = check_potion_in_use(land_id_of_soldier, map);
+                        if (potion_in_use == false) {
+                            //printf("False\n");
+                            printf ("Potion was in %d and %d. Now its for land id %d\n", 10*i+5, 10*j+5, land_id_of_soldier);
+                            add_potion_to_land_and_soldiers(map, main_matrix, land_id_of_soldier, i, j);
+                        }
+                    }
+                }
+
             }
+
         }
         first_initialization_of_main_matrix(main_matrix_temp);
 
@@ -522,8 +584,8 @@ int main() {
                         SDL_GetMouseState(&mouse_X, &mouse_Y);
                         if (game_finished == false) {
                             attack_valid = is_attack_source_valid(map, mouse_X, mouse_Y, &id_s_user);
-                            printf("You clicked on X %d, Y %d, id %d\n", mouse_X, mouse_Y,X_Y_to_hexagon(mouse_X, mouse_Y));
-                            printf("Color of your clicked hexagon is in index %d\n",map[X_Y_to_hexagon(mouse_X, mouse_Y) - 1].color_index);
+                            //printf("You clicked on X %d, Y %d, id %d\n", mouse_X, mouse_Y,X_Y_to_hexagon(mouse_X, mouse_Y));
+                            //printf("Color of your clicked hexagon is in index %d\n",map[X_Y_to_hexagon(mouse_X, mouse_Y) - 1].color_index);
                         }
                     }
                     break;
@@ -593,8 +655,8 @@ void read_file(FILE* file_ptr, hexagonal map[HEXAGON_COUNT], Uint32 hexagonal_co
         map[i].soldier = (float)soldier;
         map[i].X = temp_x;
         map[i].Y = temp_y;
-        map[i].potion_id = 0;
-        map[i].rate = 0.04;
+        map[i].potion_id = -1;
+        map[i].rate = 0.1;
         map[i].soldier_speed = 2;
         map[i].attacks = (attacks_struct*)malloc(sizeof(attacks_struct));
         map[i].attacks->next_attack = NULL;
@@ -1368,24 +1430,37 @@ int X_Y_to_hexagon(int mouse_X, int mouse_Y) {
 
 }
 
-int potion_generator(SDL_Renderer * sdlRenderer, int* X_of_potion, int* Y_of_potion, hexagonal map[HEXAGON_COUNT]) {
+int potion_generator(SDL_Renderer * sdlRenderer, int* X_of_potion, int* Y_of_potion, hexagonal map[HEXAGON_COUNT], matrix_unit main_matrix [SCREEN_WIDTH/MAIN_MATRIX_UNITS_COUNT][SCREEN_HEIGHT/MAIN_MATRIX_UNITS_COUNT]) {
 
     int random_number = (rand()%1000);
     if (random_number%100 != 0) {
         return 0;
     }
 
-    *(X_of_potion) = (rand()%(SCREEN_WIDTH-200) + 100)/10;
-    *(Y_of_potion) = (rand()%(SCREEN_HEIGHT-200) + 100)/10;
 
-    /*
-    while (map[X_Y_to_hexagon(*(X_of_potion), *(Y_of_potion))].color_index == 9) {
-        *(X_of_potion) = (rand()%(SCREEN_WIDTH-200) + 100)/10;
-        *(Y_of_potion) = (rand()%(SCREEN_HEIGHT-200) + 100)/10;
+    int line_of_potion = rand()%CELL_NUM;
+    *(X_of_potion) = (rand()%(SCREEN_WIDTH-250) + 125)/MAIN_MATRIX_UNITS_COUNT;
+    *(Y_of_potion) = (map[line_of_potion].Y+HEXAGON_h/2)/MAIN_MATRIX_UNITS_COUNT;
+    if (*(Y_of_potion) > 450/MAIN_MATRIX_UNITS_COUNT || *(Y_of_potion) < 150/MAIN_MATRIX_UNITS_COUNT) {
+        return 0;
     }
-    */
+
 
     //printf("Potion is in X = %d Y = %d\n", *(X_of_potion), *(Y_of_potion));
+
+    if (map[X_Y_to_hexagon((*(X_of_potion))*MAIN_MATRIX_UNITS_COUNT, (*(Y_of_potion))*MAIN_MATRIX_UNITS_COUNT)-1].color_index == 9) {
+        return 0;
+    }
+
+    for (int i=(*X_of_potion)-5; i<=(*X_of_potion)+5; i++) {
+        for (int j=(*Y_of_potion)-5; j<=(*Y_of_potion)+5; j++) {
+            if (i>0 && i<SCREEN_WIDTH/MAIN_MATRIX_UNITS_COUNT && j>0 && j<SCREEN_WIDTH/MAIN_MATRIX_UNITS_COUNT) {
+                if (main_matrix[i][j].Potion == true) {
+                    return 0;
+                }
+            }
+        }
+    }
 
     return 1;
 
@@ -1421,7 +1496,7 @@ int AI(int X_s, int Y_s, hexagonal map[HEXAGON_COUNT], int* X_dis, int* Y_dis, i
 
     int my_soldiers = (int)map[myID].soldier;
 
-    smallest_Delta_D = 300*300;
+    smallest_Delta_D = 150*150;
     for (int i=0; i<HEXAGON_COUNT; i++) {
         if (map[i].color_index == 9 || (map[i].X == X_s && map[i].Y == Y_s)) {
             continue;
@@ -1434,7 +1509,7 @@ int AI(int X_s, int Y_s, hexagonal map[HEXAGON_COUNT], int* X_dis, int* Y_dis, i
                 smallest_Delta_D = Delta_D;
             }
         }
-        if (map[i].color_index == 0 && Delta_D<= 150*150) {
+        if (map[i].color_index == 0 && Delta_D<= (HEXAGON_h+30)*(HEXAGON_h+30) && map[i].soldier < (float)my_soldiers) {
             Delta_D = Delta_D_calculator(X_s, Y_s, map[i].X, map[i].Y);
             *(X_dis) = map[i].X;
             *(Y_dis) = map[i].Y;
@@ -1443,7 +1518,7 @@ int AI(int X_s, int Y_s, hexagonal map[HEXAGON_COUNT], int* X_dis, int* Y_dis, i
 
     }
 
-    if (smallest_Delta_D != 300*300) {
+    if (smallest_Delta_D != 150*150) {
         //printf ("X_dis is %d, Y_dis is %d but I'm %d and %d\n", *(X_dis), *(Y_dis), X_s, Y_s);
         //printf ("%d - %d\n", map[X_Y_to_hexagon(*(X_dis), *(Y_dis))-1].color_index, X_Y_to_hexagon(*(X_dis), *(Y_dis))-1);
         return X_Y_to_hexagon(*(X_dis), *(Y_dis)) - 1;
@@ -1461,6 +1536,7 @@ int AI(int X_s, int Y_s, hexagonal map[HEXAGON_COUNT], int* X_dis, int* Y_dis, i
 void filling_main_matrix_for_attacks(matrix_unit main_matrix[60][60], hexagonal map[HEXAGON_COUNT], int X_dis, int Y_dis, int i, int j) {
     //printf ("%d - %d\n", map[X_Y_to_hexagon((X_dis), (Y_dis))-1].color_index, X_Y_to_hexagon((X_dis), (Y_dis))-1);
     main_matrix[map[i].X/10][map[i].Y/10].local_soldiers[j].X = (float)map[i].X;
+    main_matrix[map[i].X/10][map[i].Y/10].local_soldiers[j].potion_id = map[i].potion_id;
     main_matrix[map[i].X/10][map[i].Y/10].local_soldiers[j].Y = (float)map[i].Y;
     main_matrix[map[i].X/10][map[i].Y/10].local_soldiers[j].land_id = map[i].color_index;
     main_matrix[map[i].X/10][map[i].Y/10].local_soldiers[j].Y_d = Y_dis;
@@ -1475,6 +1551,8 @@ void first_initialization_of_main_matrix(matrix_unit main_matrix[SCREEN_HEIGHT/M
     for (int i=0; i<SCREEN_WIDTH/MAIN_MATRIX_UNITS_COUNT; i++) {
         for (int j=0; j<SCREEN_HEIGHT/MAIN_MATRIX_UNITS_COUNT; j++) {
             main_matrix[i][j].Potion = false;
+            main_matrix[i][j].center_of_potion = false;
+            main_matrix[i][j].local_potion.potion_in_use = false;
             for (int k=0; k<8; k++) {
                 main_matrix[i][j].local_soldiers[k].V_y = 0;
                 main_matrix[i][j].local_soldiers[k].V_x = 0;
@@ -1552,17 +1630,29 @@ void set_new_attack(hexagonal map[HEXAGON_COUNT], matrix_unit main_matrix[SCREEN
     //printf ("from X_s = %d, Y_s = %d\n", map[i].X, map[i].Y);
     map[i].is_s = true;
     map[id_dis].is_d = true;
+    bool new_attack = true;
 
     int count = 0;
     local_attacks = map[i].attacks;
     while (local_attacks->next_attack != NULL) {
         count++;
+        if (local_attacks != map[i].attacks) {
+            if (local_attacks->finished == true) {
+                new_attack = false;
+                break;
+            }
+        }
         //printf ("Count is: %d\n", count);
         local_attacks = local_attacks->next_attack;
     }
-    local_attacks->next_attack = (attacks_struct*)malloc(sizeof(attacks_struct));
-    local_attacks = local_attacks->next_attack;
-    local_attacks->next_attack = NULL;
+    if (new_attack == true) {
+        local_attacks->next_attack = (attacks_struct *) malloc(sizeof(attacks_struct));
+        local_attacks = local_attacks->next_attack;
+        local_attacks->next_attack = NULL;
+    }
+    else {
+        local_attacks->finished = false;
+    }
     local_attacks->soldiers = SOLDIER_GENERATOR_RATE*map[i].soldier;
     map[i].soldier = 0;
     local_attacks->Y_dis = *(Y_dis);
@@ -1589,6 +1679,39 @@ int all_soldiers_count_in_one_land(hexagonal map[HEXAGON_COUNT], int index) {
 
 }
 
+void potion_add_to_conquered_land(hexagonal map[HEXAGON_COUNT], int id_dis, soldier local_soldiers) {
+
+    if (local_soldiers.potion_id == -1) {
+        map[id_dis].potion_id = -1;
+        return;
+    }
+    bool potion = false;
+    int index = 0;
+    for (int i=0; i<HEXAGON_COUNT; i++) {
+        if (map[i].color_index == local_soldiers.land_id) {
+            if (map[i].potion_id != -1) {
+                potion = true;
+                index = i;
+            }
+            break;
+        }
+    }
+
+
+    map[id_dis].potion_id = local_soldiers.potion_id;
+    map[id_dis].land_potion.potion_id = (short)local_soldiers.potion_id;
+    map[id_dis].land_potion.potion_in_use = true;
+    if (index == 0) {
+        map[id_dis].land_potion.potion_time = 1000;
+        return;
+    }
+    map[id_dis].land_potion.potion_time = map[index].land_potion.potion_time;
+    return;
+
+    //map[id_dis].land_potion.potion_time = map[index].land_potion.
+
+}
+
 void battle(hexagonal map[HEXAGON_COUNT], matrix_unit main_matrix[SCREEN_HEIGHT/MAIN_MATRIX_UNITS_COUNT][SCREEN_HEIGHT/MAIN_MATRIX_UNITS_COUNT], int i, int j, int k) {
     int id_dis = X_Y_to_hexagon(main_matrix[i][j].local_soldiers[k].X_d, main_matrix[i][j].local_soldiers[k].Y_d);
     id_dis--;
@@ -1609,9 +1732,10 @@ void battle(hexagonal map[HEXAGON_COUNT], matrix_unit main_matrix[SCREEN_HEIGHT/
     map[id_dis].color_index = main_matrix[i][j].local_soldiers[k].land_id;
     //printf ("%d - %d\n", map[id_dis].color_index, main_matrix[i][j].local_soldiers[k].land_id);
     map[id_dis].soldier = 1;
-    map[id_dis].potion_id = -1;
     map[id_dis].is_d = false;
     map[id_dis].is_s = false;
+    potion_add_to_conquered_land(map, id_dis, main_matrix[i][j].local_soldiers[k]);
+    //map[id_dis].
     attacks_struct* local_attacks = map[id_dis].attacks;
     /*
     attacks_struct* temp_attack;
@@ -1860,7 +1984,412 @@ void user_w_or_l_menu(SDL_Renderer * sdlUserWonRenderer, bool user_won) {
     SDL_RenderClear(sdlUserWonRenderer);
 }
 
+bool check_potion_in_use(int land_id_of_soldier, hexagonal map[HEXAGON_COUNT]) {
+    for (int i=0; i<HEXAGON_COUNT; i++) {
+        if (map[i].color_index == land_id_of_soldier) {
+            if (map[i].potion_id != -1) {
+                return true;
+            }
+            else {
+                return false;
+            }
+        }
+    }
+}
 
+void add_potion_to_land_and_soldiers(hexagonal map[HEXAGON_COUNT], matrix_unit main_matrix[SCREEN_HEIGHT/MAIN_MATRIX_UNITS_COUNT][SCREEN_HEIGHT/MAIN_MATRIX_UNITS_COUNT], int land_id_of_soldier, int index_i, int index_j) {
+
+    // add to lands
+    int potion_id = main_matrix[index_i][index_j].local_potion.potion_id;
+    for (int i=0; i<HEXAGON_COUNT; i++) {
+        if (map[i].color_index == land_id_of_soldier) {
+            if (potion_id == 1) {
+                map[i].land_potion.potion_time = main_matrix[index_i][index_j].local_potion.potion_time;
+                map[i].land_potion.potion_id = (short)potion_id;
+                map[i].land_potion.potion_in_use = true;
+                map[i].soldier_speed = 4;
+                map[i].potion_id = potion_id;
+            }
+        }
+    }
+
+    // add to soldiers
+    for (int i=0; i<SCREEN_HEIGHT/MAIN_MATRIX_UNITS_COUNT; i++) {
+        for (int j=0; j<SCREEN_WIDTH/MAIN_MATRIX_UNITS_COUNT; j++) {
+            for (int k=0; k<8; k++) {
+                if (main_matrix[i][j].local_soldiers[k].X != 0 && main_matrix[i][j].local_soldiers[k].land_id == land_id_of_soldier) {
+                    if (potion_id == 1) {
+                        main_matrix[i][j].local_soldiers[k].potion_id = 1;
+                        main_matrix[i][j].local_soldiers[k].V_x*=2;
+                        main_matrix[i][j].local_soldiers[k].V_y*=2;
+                    }
+                }
+            }
+        }
+    }
+
+
+    // free potion
+    // find center of potion
+    int x_center;
+    int y_center;
+    for (int i=index_i-1; i<=index_i+1; i++) {
+        for (int j=index_j-1; j<=index_j+1; j++) {
+            if (i>0 && i<SCREEN_WIDTH/MAIN_MATRIX_UNITS_COUNT && j>0 && j<SCREEN_HEIGHT/MAIN_MATRIX_UNITS_COUNT) {
+                if (main_matrix[i][j].center_of_potion == true) {
+                    x_center = i;
+                    y_center = j;
+                    break;
+                }
+            }
+        }
+    }
+    // free all of potion
+    for (int i=x_center-1; i<=x_center+1; i++) {
+        for (int j=y_center-1; j<=y_center+1; j++) {
+            if (i>0 && i<SCREEN_WIDTH/MAIN_MATRIX_UNITS_COUNT && j>0 && j<SCREEN_HEIGHT/MAIN_MATRIX_UNITS_COUNT) {
+                //printf ("| %d - %d |", 10*i+5, 10*j+5);
+                main_matrix[i][j].Potion = false;
+                main_matrix[i][j].center_of_potion = false;
+                main_matrix[i][j].local_potion.potion_id = -1;
+            }
+        }
+    }
+
+    for (int i=x_center-1; i<=x_center+1; i++) {
+        for (int j=y_center-1; j<=y_center+1; j++) {
+            if (i>0 && i<SCREEN_WIDTH/MAIN_MATRIX_UNITS_COUNT && j>0 && j<SCREEN_HEIGHT/MAIN_MATRIX_UNITS_COUNT) {
+                //printf ("| %d| ",main_matrix[i][j].Potion);
+            }
+        }
+    }
+    //printf ("\n");
+
+
+    /*
+    main_matrix[index_i][index_j].Potion = false;
+    main_matrix[index_i][index_j].center_of_potion = true;
+    main_matrix[index_i][index_j].local_potion.potion_id = -1;
+     */
+    return;
+}
+
+void delete_potion_from_land_and_soldiers(hexagonal map[HEXAGON_COUNT], matrix_unit main_matrix[SCREEN_HEIGHT/MAIN_MATRIX_UNITS_COUNT][SCREEN_HEIGHT/MAIN_MATRIX_UNITS_COUNT], int land_id, int potion_id, int index) {
+
+
+    map[index].land_potion.potion_time = 0;
+    map[index].land_potion.potion_id = -1;
+    map[index].land_potion.potion_in_use = false;
+    map[index].potion_id = -1;
+
+    if (potion_id == 1) {
+        map[index].soldier_speed = 2;
+    }
+
+    return;
+
+}
+
+
+void add_potion_to_main_matrix_as_index(matrix_unit main_matrix[SCREEN_HEIGHT/MAIN_MATRIX_UNITS_COUNT][SCREEN_HEIGHT/MAIN_MATRIX_UNITS_COUNT], int X_of_potion, int Y_of_potion) {
+
+    main_matrix[X_of_potion][Y_of_potion].center_of_potion = true;
+    printf("Potion was generated in location %d and %d \n", 10 * X_of_potion + 5, 10 * Y_of_potion + 5);
+    for (int i=X_of_potion-1; i<=X_of_potion+1; i++) {
+        for (int j=Y_of_potion-1; j<=Y_of_potion+1; j++) {
+            if (i<SCREEN_WIDTH/MAIN_MATRIX_UNITS_COUNT && i>0 && j<SCREEN_HEIGHT/MAIN_MATRIX_UNITS_COUNT && j>0) {
+                main_matrix[i][j].Potion = true;
+                main_matrix[i][j].local_potion.potion_in_use = false;
+                //main_matrix[i][j].local_potion.potion_id = rand()%5 + 1;
+                main_matrix[i][j].local_potion.potion_id = 1;
+                //main_matrix[i][j].local_potion.potion_time = rand()%100000 + 1000;
+                main_matrix[i][j].local_potion.potion_time = 1000;
+            }
+        }
+    }
+
+    return;
+}
+
+
+
+/*
+ main_matrix[X_of_potion][Y_of_potion].Potion = true;
+    printf("Potion was generated in location %d and %d \n", 10 * X_of_potion + 5, 10 * Y_of_potion + 5);
+    main_matrix[X_of_potion][Y_of_potion].local_potion.potion_in_use = false;
+    //main_matrix[X_of_potion][Y_of_potion].local_potion.potion_id = rand()%5 + 1;
+    main_matrix[X_of_potion][Y_of_potion].local_potion.potion_id = 1;
+    //main_matrix[X_of_potion][Y_of_potion].local_potion.potion_time = rand()%100000 + 1000;
+    main_matrix[X_of_potion][Y_of_potion].local_potion.potion_time = 1000;
+ */
+
+// random map generator
+void file_name_change(char file_name[7], int file_name_counter) {
+
+    file_name[2] = file_name_counter%10 + '0';
+    file_name_counter = file_name_counter/10;
+    file_name[1] = file_name_counter%10 + '0';
+    file_name_counter = file_name_counter/10;
+    file_name[0] = file_name_counter + '0';
+
+    return;
+}
+
+int find_in_players_first_state_by_index(int number_of_players, int players_first_state[number_of_players][2], int X, int Y, int index) {
+
+
+    for (int i=0; i<number_of_players; i++) {
+        if (i == index) {
+            continue;
+        }
+        if (players_first_state[i][0] == X && players_first_state[i][1] == Y) {
+            return 1;
+        }
+    }
+
+    return 0;
+}
+
+void players_first_state_generator(int number_of_players, int players_first_state[number_of_players][2]) {
+
+    for (int i=0; i<number_of_players; i++) {
+        players_first_state[i][0] = 0;
+        players_first_state[i][1] = 0;
+    }
+
+    for (int i=0; i<number_of_players; i++) {
+        players_first_state[i][0] = ((rand())%10000)%(CELL_NUM-2) + 1;
+        players_first_state[i][1] = ((rand())%10000)%(CELL_NUM-2) + 1;
+        while (find_in_players_first_state_by_index(number_of_players, players_first_state, players_first_state[i][0], players_first_state[i][1], i) != 0) {
+            players_first_state[i][0] = (players_first_state[i][0] + 1)%(CELL_NUM-2) + 1;
+            players_first_state[i][1] = (players_first_state[i][1] + 1)%(CELL_NUM-2) + 1;
+        }
+    }
+    return;
+}
+
+int find_in_players_first_state(int number_of_players, int players_first_state[number_of_players][2], int X, int Y, int flag) {
+
+    for (int i=0; i<number_of_players; i++) {
+        if (players_first_state[i][0] == X && players_first_state[i][1] == Y) {
+            if ((flag == 0 && players_first_state[i][0]%2 == 0) || (flag == 1 && players_first_state[i][0]%2 == 1)) {
+                return i+1;
+            }
+        }
+    }
+    return 0;
+}
+
+void map_generator(int number_of_players, int players_first_state[number_of_players][2], FILE* map_ptr) {
+
+    int xcounter = 0;
+    int ycounter = 0;
+
+    int i = 0;
+    int j = 0;
+
+    int find = 0;
+
+    int flag = 0;
+
+    while (xcounter < (SCREEN_WIDTH+(HEXAGON_h/2))) {
+
+        j=0;
+
+        while (ycounter<(SCREEN_HEIGHT+(HEXAGON_h/2))) {
+
+            // borders
+            if (xcounter==0 || ycounter<(HEXAGON_h/2+1) || abs(SCREEN_HEIGHT-ycounter)<=(HEXAGON_h/2 + 1) || abs(SCREEN_WIDTH-xcounter)<=(HEXAGON_h/2 + 1)) {
+                fprintf(map_ptr, "%d %d %d %d\n", 9, 0, xcounter, ycounter);
+                ycounter = ycounter + HEXAGON_h;
+                j++;
+                continue;
+            }
+
+
+            // players
+            find = find_in_players_first_state(number_of_players, players_first_state, 2*i, j, flag);
+            if (find != 0) {
+                printf ("Player-A!\n");
+                fprintf(map_ptr, "%d %d %d %d\n", find-1, (rand())%30 + 51, xcounter, ycounter);
+                ycounter = ycounter + HEXAGON_h;
+                j++;
+                continue;
+            }
+
+            // gray and black lands
+            if (((rand())%1000)%(7 - (CELL_NUM/number_of_players)%4) == 0) {
+                fprintf(map_ptr, "%d %d %d %d\n", 9, 0, xcounter, ycounter);
+            }
+            else {
+                fprintf(map_ptr, "%d %d %d %d\n", 8, 65, xcounter, ycounter);
+            }
+            j++;
+            ycounter = ycounter + HEXAGON_h;
+
+        }
+
+        i++;
+
+        ycounter = 0;
+        xcounter = xcounter + 3*HEXAGON_SIDE;
+
+    }
+
+    flag = 1;
+
+
+    i = 0;
+
+    xcounter = HEXAGON_SIDE + HEXAGON_SIDE/2;
+    ycounter = HEXAGON_h/2;
+
+    while (xcounter < (SCREEN_WIDTH+(HEXAGON_h/2))) {
+
+        j = 0;
+
+        while (ycounter<(SCREEN_HEIGHT+(HEXAGON_h/2))) {
+
+            // borders
+            if (xcounter==0 || ycounter<(HEXAGON_h/2+1) || abs(SCREEN_HEIGHT-ycounter)<=(HEXAGON_h/2 + 1) || abs(SCREEN_WIDTH-xcounter)<=(HEXAGON_h/2 + 1)) {
+                fprintf(map_ptr, "%d %d %d %d\n", 9, 0, xcounter, ycounter);
+                ycounter = ycounter + HEXAGON_h;
+                j++;
+                continue;
+            }
+
+
+            // players
+            find = find_in_players_first_state(number_of_players, players_first_state, 2*i-1, j, flag);
+            if (find != 0) {
+                printf ("Player-B!\n");
+                fprintf(map_ptr, "%d %d %d %d\n", find-1, (rand())%30 + 51, xcounter, ycounter);
+                ycounter = ycounter + HEXAGON_h;
+                j++;
+                continue;
+            }
+
+            // gray and black lands
+            if (((rand())%1000)%(7 - (CELL_NUM/number_of_players)%4) == 0) {
+                fprintf(map_ptr, "%d %d %d %d\n", 9, 0, xcounter, ycounter);
+            }
+            else {
+                fprintf(map_ptr, "%d %d %d %d\n", 8, 65, xcounter, ycounter);
+            }
+
+            j++;
+            ycounter = ycounter + HEXAGON_h;
+
+        }
+
+        i++;
+
+        ycounter = HEXAGON_h/2;
+        xcounter = xcounter + 3*HEXAGON_SIDE;
+
+    }
+    return;
+}
+
+int count_hexagons() {
+    int hexagon_counter = 0;
+    int xcounter = 0;
+    int ycounter = 0;
+
+    while (xcounter < (SCREEN_WIDTH+(HEXAGON_h/2))) {
+
+        while (ycounter<(SCREEN_HEIGHT+(HEXAGON_h/2))) {
+
+            ycounter = ycounter + HEXAGON_h;
+            hexagon_counter++;
+        }
+
+        ycounter = 0;
+        xcounter = xcounter + 3*HEXAGON_SIDE;
+
+    }
+
+    xcounter = HEXAGON_SIDE + HEXAGON_SIDE/2;
+    ycounter = HEXAGON_h/2;
+
+    while (xcounter < (SCREEN_WIDTH+(HEXAGON_h/2))) {
+
+        while (ycounter<(SCREEN_HEIGHT+(HEXAGON_h/2))) {
+
+            ycounter = ycounter + HEXAGON_h;
+            hexagon_counter++;
+        }
+        ycounter = HEXAGON_h/2;
+        xcounter = xcounter + 3*HEXAGON_SIDE;
+    }
+
+    return hexagon_counter;
+}
+
+void random_map_generator() {
+
+    char file_name[] = "000.txt";
+    int file_name_counter = 0;
+    FILE* map_ptr = fopen(file_name, "r");
+
+    while (map_ptr != NULL) {
+        file_name_counter++;
+        fclose(map_ptr);
+        file_name_change(file_name, file_name_counter);
+        map_ptr = fopen(file_name, "r");
+    }
+
+    map_ptr = fopen(file_name, "w");
+
+    srand(time(NULL));
+
+
+    ////////////////////////// random number of players ///////////////////////
+    /*
+    int number_of_players = (rand())%4 + 2;
+    */
+
+    // getting number of players
+    int number_of_players = 0;
+    printf ("Enter a number between 2 to 6:");
+    scanf ("%d", &number_of_players);
+    while (!(number_of_players>=2 && number_of_players<=6)) {
+        printf ("Enter a valid number:");
+        scanf ("%d", &number_of_players);
+    }
+
+
+    // getting cell num
+    printf ("Enter a number between 5 to 55:");
+    scanf ("%d", &CELL_NUM);
+    while (!(CELL_NUM>=5 && CELL_NUM<=55)) {
+        printf ("Enter a valid number:");
+        scanf ("%d", &CELL_NUM);
+    }
+    HEXAGON_h = (SCREEN_HEIGHT/CELL_NUM)/1 + 1;
+    HEXAGON_SIDE = (int)(HEXAGON_h/(2*0.866025))/1 + 1;
+
+
+    int players_first_state[number_of_players][2];
+    players_first_state_generator(number_of_players, players_first_state);
+
+    HEXAGON_COUNT = count_hexagons();
+    fprintf(map_ptr, "%d\n", CELL_NUM);
+    fprintf(map_ptr, "%d\n", HEXAGON_COUNT);
+    fprintf(map_ptr, "%d\n", number_of_players);
+
+
+    map_generator(number_of_players, players_first_state, map_ptr);
+
+    printf ("%d\n", number_of_players);
+
+    for (int i=0; i<number_of_players; i++) {
+        printf ("%d - %d \n", players_first_state[i][0], players_first_state[i][1]);
+    }
+
+    fclose(map_ptr);
+    return;
+}
 
 
 
