@@ -1,0 +1,3 @@
+C:/Users/smiza/Desktop/Mizanian/Sharif/C/Project/cmake-build-debug/CMakeFiles/Project.dir
+C:/Users/smiza/Desktop/Mizanian/Sharif/C/Project/cmake-build-debug/CMakeFiles/edit_cache.dir
+C:/Users/smiza/Desktop/Mizanian/Sharif/C/Project/cmake-build-debug/CMakeFiles/rebuild_cache.dir
